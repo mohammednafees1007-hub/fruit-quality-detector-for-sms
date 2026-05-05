@@ -672,6 +672,31 @@ pip install -r requirements.txt
 http://127.0.0.1:8000/
 ```
 
+### 7. Run the master 50-image model test
+
+Use this when you need performance proof for presentation or report work.
+
+```powershell
+.\.venv\Scripts\python.exe master_model_test.py --limit 50
+```
+
+The test creates:
+
+```text
+reports/master_model_test/report.html
+reports/master_model_test/results.csv
+reports/master_model_test/summary.json
+reports/master_model_test/graphs/
+```
+
+The report includes accuracy, macro precision, macro recall, macro-F1, per-class precision/recall/F1, confusion matrix, confidence distribution, grade distribution, latency per image, and timing breakdown.
+
+For a slower full application pipeline test with YOLO crop timing:
+
+```powershell
+.\.venv\Scripts\python.exe master_model_test.py --limit 50 --mode full-pipeline --skip-fruit-name
+```
+
 ## API Endpoints
 
 ### `GET /`

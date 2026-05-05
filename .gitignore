@@ -21,6 +21,7 @@ models/*convnext*.keras
 # Generated datasets and API response dumps
 data/quality_training/
 data/fruits360_yolo/
+reports/
 detect_response.json
 test*.json
 
