@@ -24,8 +24,96 @@ Repository: <https://github.com/mohammednafees1007-hub/fruit-quality-detector-fo
 | Current fruit-name model | CLIP ViT-L/14 with fallback models |
 | Future target device | Raspberry Pi 5 |
 
+## Visual Overview
+
+### Quality-First System Architecture
+
+```mermaid
+flowchart TD
+    A["User image input"] --> B{"Input type"}
+    B --> C["Image upload"]
+    B --> D["Camera capture"]
+    D --> E{"Camera Robust Mode?"}
+    C --> F["OpenCV decode"]
+    E -->|Enabled| G["Best frame + contrast + sharpening"]
+    E -->|Disabled| F
+    G --> H["YOLOv8x fruit box detection"]
+    F --> H
+    H --> I{"Fruit box found?"}
+    I -->|Yes| J["Crop fruit region"]
+    I -->|No| K["Use full image"]
+    J --> L["MobileNetV2 Keras quality grader"]
+    K --> L
+    L --> M["Fresh / Adulterant / Rotten"]
+    M --> N["Grade A / B / C"]
+    H --> O["Annotated result image"]
+    F --> P["CLIP ViT-L/14 fruit naming"]
+    P --> Q["Fruit name as secondary context"]
+    N --> R["Website result panel"]
+    O --> R
+    Q --> R
+```
+
+### Model Responsibility Map
+
+```mermaid
+flowchart LR
+    subgraph Main["Main grading path"]
+        A["Fruit crop or full image"] --> B["MobileNetV2 quality classifier"]
+        B --> C["Quality: Fresh / Adulterant / Rotten"]
+        C --> D["Grade: A / B / C"]
+    end
+
+    subgraph Support["Supporting context"]
+        E["YOLOv8x"] --> F["Fruit box + annotation"]
+        G["CLIP ViT-L/14"] --> H["Fruit name"]
+        I["VGG19 / MobileNetV2 ImageNet"] --> J["Fallback fruit name"]
+    end
+
+    F --> A
+    H --> K["Display only"]
+    J --> K
+```
+
+### Laptop Prototype to Raspberry Pi 5 Path
+
+```mermaid
+flowchart LR
+    subgraph Laptop["Current laptop prototype"]
+        A["YOLOv8x detector"]
+        B["CLIP ViT-L/14 fruit name"]
+        C["Keras MobileNetV2 quality model"]
+        D["FastAPI website"]
+    end
+
+    subgraph Optimize["Edge optimization step"]
+        E["Replace YOLOv8x with YOLOv8n / YOLOv11n / YOLOv8n-seg"]
+        F["Convert Keras model to TensorFlow Lite"]
+        G["Remove or replace CLIP with small classifier"]
+        H["Benchmark FPS, RAM, and temperature"]
+    end
+
+    subgraph Pi["Future Raspberry Pi 5 deployment"]
+        I["Pi Camera"]
+        J["Lightweight detector"]
+        K["TFLite quality grader"]
+        L["Local dashboard / SMS workflow"]
+    end
+
+    A --> E
+    B --> G
+    C --> F
+    D --> H
+    E --> J
+    F --> K
+    G --> L
+    H --> I
+    I --> J --> K --> L
+```
+
 ## Table of Contents
 
+- [Visual Overview](#visual-overview)
 - [Objective](#objective)
 - [Introduction and Motivation](#introduction-and-motivation)
 - [Problem Statement](#problem-statement)
@@ -209,6 +297,36 @@ VGG19 is not the main model because:
 | YOLOv8n-seg / lightweight segmentation | Better fruit crop than box detection | Needs custom dataset and training |
 | TensorFlow Lite MobileNet/EfficientNet-Lite | Faster Pi inference | Requires conversion and Pi-side testing |
 | Hailo-compiled YOLO/classifier | Very fast on Pi with AI accelerator | Requires Raspberry Pi AI Kit / AI HAT+ and model conversion |
+
+### Model Selection Decision Tree
+
+```mermaid
+flowchart TD
+    A["Need quality grading"] --> B{"Target device?"}
+    B -->|Laptop demo| C["Use MobileNetV2 Keras quality model"]
+    B -->|Raspberry Pi 5| D["Use TFLite MobileNetV2 / EfficientNet-Lite"]
+    C --> E{"Need stronger accuracy?"}
+    E -->|Yes, with GPU| F["Train EfficientNetV2 or ConvNeXtTiny"]
+    E -->|No, demo ready| G["Keep current MobileNetV2"]
+    D --> H{"Need real-time camera?"}
+    H -->|Yes| I["Use small detector + TFLite classifier"]
+    H -->|With AI accelerator| J["Use Hailo-compiled detector/classifier"]
+    H -->|No| K["Use CPU inference with lower FPS"]
+```
+
+### Edge Suitability Comparison
+
+```text
+Model / Role             Accuracy Potential     Pi 5 Suitability
+MobileNetV2 quality      Medium-High            High
+EfficientNetV2 quality   High                   Medium
+ConvNeXtTiny quality     High                   Low-Medium
+YOLOv8x detection        High                   Low
+YOLOv8n detection        Medium                 High
+CLIP ViT-L/14 naming     High                   Low
+TFLite classifier        Medium-High            Very High
+Hailo compiled model     High                   Very High with accelerator
+```
 
 ### Why Not Use the Biggest Models on Raspberry Pi 5
 
@@ -701,6 +819,14 @@ It was selected because it performed better than the local ConvNeXtTiny run on m
 | Macro-F1 | 76.54% |
 | Macro recall | 76.79% |
 
+### Metric Bar Chart
+
+```text
+Accuracy      76.79% | ####################------- |
+Macro-F1      76.54% | ####################------- |
+Macro recall  76.79% | ####################------- |
+```
+
 ### Per-Class Results
 
 | Class | Precision | Recall | F1 | Support |
@@ -708,6 +834,14 @@ It was selected because it performed better than the local ConvNeXtTiny run on m
 | Adulterated | 73.39% | 71.43% | 72.40% | 112 |
 | Fresh | 83.61% | 91.07% | 87.18% | 112 |
 | Rotten | 72.38% | 67.86% | 70.05% | 112 |
+
+### Per-Class Recall Graph
+
+```text
+Fresh       91.07% | #########################-- |
+Adulterant  71.43% | ###################-------- |
+Rotten      67.86% | ##################--------- |
+```
 
 ### Confusion Matrix
 
@@ -718,6 +852,32 @@ Rows are true labels. Columns are predicted labels.
 | Adulterated | 80 | 9 | 23 |
 | Fresh | 4 | 102 | 6 |
 | Rotten | 25 | 11 | 76 |
+
+### Test Set Correct vs Incorrect
+
+```mermaid
+pie showData
+    title Holdout Test Predictions
+    "Correct predictions" : 258
+    "Incorrect predictions" : 78
+```
+
+### Confusion Matrix Flow
+
+```mermaid
+flowchart LR
+    A1["True Adulterated: 112"] --> A2["Predicted Adulterated: 80"]
+    A1 --> A3["Predicted Fresh: 9"]
+    A1 --> A4["Predicted Rotten: 23"]
+
+    F1["True Fresh: 112"] --> F2["Predicted Adulterated: 4"]
+    F1 --> F3["Predicted Fresh: 102"]
+    F1 --> F4["Predicted Rotten: 6"]
+
+    R1["True Rotten: 112"] --> R2["Predicted Adulterated: 25"]
+    R1 --> R3["Predicted Fresh: 11"]
+    R1 --> R4["Predicted Rotten: 76"]
+```
 
 ### Discussion
 
