@@ -464,23 +464,30 @@ def root():
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Fruit Quality Detector for SMS</title>
     <style>
-      :root { --ink:#17211b; --muted:#5d6b62; --line:#d8e2dc; --paper:#f4f8f5; --leaf:#247a45; --leaf-2:#15552d; --blue:#1f5c80; --amber:#a86612; --bad:#bd2442; --soft:#eef5f0; }
+      :root { --ink:#17211b; --muted:#5d6b62; --line:#d8e2dc; --paper:#f4f8f5; --leaf:#247a45; --leaf-2:#15552d; --blue:#1f5c80; --amber:#a86612; --bad:#bd2442; --soft:#eef5f0; --card:#ffffff; --shadow:0 18px 50px rgba(23,33,27,.10); --grade:#247a45; --grade-soft:#e7f6ec; }
       * { box-sizing:border-box; }
-      body { margin:0; min-height:100vh; font-family:Inter,system-ui,Segoe UI,sans-serif; background:linear-gradient(120deg,rgba(36,122,69,.10),transparent 38%),linear-gradient(180deg,#fbfdfb,var(--paper)); color:var(--ink); }
+      html { scroll-behavior:smooth; }
+      body { margin:0; min-height:100vh; font-family:Inter,system-ui,Segoe UI,sans-serif; background:radial-gradient(circle at 8% 8%,rgba(36,122,69,.16),transparent 28%),radial-gradient(circle at 92% 18%,rgba(31,92,128,.12),transparent 28%),linear-gradient(180deg,#fbfdfb,var(--paper)); color:var(--ink); animation:pageIn .45s ease both; }
       main { width:min(1180px,calc(100% - 32px)); margin:0 auto; padding:28px 0; display:grid; gap:18px; }
       header { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:end; gap:16px; }
       h1 { margin:0; font-size:clamp(2rem,5vw,4rem); line-height:.98; letter-spacing:0; }
       .lead { margin:10px 0 0; color:var(--muted); max-width:760px; line-height:1.55; }
       .eyebrow { margin:0 0 8px; color:var(--leaf-2); font-weight:800; font-size:.78rem; text-transform:uppercase; }
       .status,.panel { border:1px solid var(--line); border-radius:8px; background:rgba(255,255,255,.88); }
-      .status { padding:10px 12px; color:var(--muted); min-width:150px; text-align:center; font-weight:800; }
+      .status { padding:10px 12px; color:var(--muted); min-width:150px; text-align:center; font-weight:800; box-shadow:0 10px 28px rgba(23,33,27,.08); transition:background .25s ease,color .25s ease,transform .25s ease; }
+      .status.analyzing { color:#133f27; background:#e8f6ed; transform:translateY(-1px); }
+      .status.done { color:#12391f; background:#ddf4e4; }
+      .status.error-state { color:#7e1430; background:#fde9ee; }
       .grid { display:grid; grid-template-columns:minmax(0,1.08fr) minmax(340px,.92fr); gap:18px; }
-      .panel { box-shadow:0 18px 50px rgba(23,33,27,.10); padding:16px; }
+      .panel { box-shadow:var(--shadow); padding:16px; transition:transform .25s ease,box-shadow .25s ease,border-color .25s ease; }
+      .panel:hover { transform:translateY(-2px); box-shadow:0 22px 58px rgba(23,33,27,.13); }
       .preview { aspect-ratio:4/3; border-radius:8px; background:#dce8df; overflow:hidden; display:grid; place-items:center; position:relative; }
-      .preview img,.preview video { width:100%; height:100%; object-fit:contain; display:none; }
+      .preview img,.preview video { width:100%; height:100%; object-fit:contain; display:none; opacity:0; transition:opacity .28s ease,transform .28s ease; }
+      .preview img.visible,.preview video.visible { opacity:1; transform:scale(1); }
       .preview video { object-fit:cover; }
       .placeholder { color:var(--muted); font-weight:700; text-align:center; padding:24px; }
       .loading { position:absolute; inset:0; background:rgba(246,250,247,.88); display:none; align-items:center; justify-content:center; padding:22px; backdrop-filter:blur(3px); }
+      .loading::before { content:""; position:absolute; inset:0; background:linear-gradient(105deg,transparent 0%,transparent 42%,rgba(255,255,255,.55) 50%,transparent 58%,transparent 100%); transform:translateX(-100%); animation:scan 1.65s ease-in-out infinite; }
       .loading-card { width:min(420px,100%); border:1px solid var(--line); border-radius:8px; background:white; padding:18px; box-shadow:0 14px 40px rgba(23,33,27,.12); }
       .loading-title { margin:0; font-size:1.2rem; font-weight:900; }
       .eta { margin:6px 0 12px; color:var(--muted); }
@@ -489,31 +496,52 @@ def root():
       .controls { display:grid; grid-template-columns:1fr auto; gap:10px; margin-top:14px; }
       .camera-controls { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin-top:10px; }
       input[type=file] { width:100%; border:1px solid var(--line); border-radius:8px; background:white; padding:10px; }
-      button { border:0; border-radius:8px; background:var(--leaf); color:white; min-height:44px; padding:0 18px; font-weight:800; cursor:pointer; }
+      button { border:0; border-radius:8px; background:var(--leaf); color:white; min-height:44px; padding:0 18px; font-weight:800; cursor:pointer; transition:transform .18s ease,box-shadow .18s ease,filter .18s ease; box-shadow:0 12px 28px rgba(36,122,69,.22); }
+      button:hover { transform:translateY(-1px); filter:saturate(1.05); }
+      button:active { transform:translateY(1px) scale(.99); }
       button.secondary { background:#1f5c80; } button.neutral { background:#596760; } button:disabled { opacity:.5; cursor:not-allowed; }
-      .toggle { min-height:44px; border:1px solid var(--line); border-radius:8px; background:white; display:flex; align-items:center; justify-content:center; gap:8px; font-weight:800; cursor:pointer; }
+      .toggle { min-height:44px; border:1px solid var(--line); border-radius:8px; background:white; display:flex; align-items:center; justify-content:center; gap:8px; font-weight:800; cursor:pointer; transition:transform .18s ease,border-color .18s ease,background .18s ease; }
+      .toggle:hover { transform:translateY(-1px); border-color:#9fc8ad; background:#fbfefc; }
       .toggle input { width:18px; height:18px; accent-color:var(--leaf); }
       h2 { margin:0; font-size:clamp(1.7rem,4vw,3rem); line-height:1; letter-spacing:0; }
       .detail { color:var(--muted); line-height:1.55; }
+      .result-panel { --grade:#247a45; --grade-soft:#e7f6ec; overflow:hidden; }
+      .result-panel.grade-a { --grade:#247a45; --grade-soft:#e7f6ec; }
+      .result-panel.grade-b { --grade:#a86612; --grade-soft:#fff2d8; }
+      .result-panel.grade-c { --grade:#bd2442; --grade-soft:#fde9ee; }
+      .result-hero { display:grid; grid-template-columns:auto minmax(0,1fr); gap:14px; align-items:center; padding:14px; border:1px solid color-mix(in srgb,var(--grade) 24%,var(--line)); border-radius:8px; background:linear-gradient(135deg,var(--grade-soft),#fff); }
+      .grade-badge { width:76px; aspect-ratio:1; border-radius:8px; display:grid; place-items:center; color:white; background:var(--grade); font-size:2.8rem; font-weight:950; box-shadow:0 16px 35px color-mix(in srgb,var(--grade) 28%,transparent); }
+      .result-panel.result-flash .grade-badge { animation:resultPulse .62s ease; }
       .facts { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin:18px 0 0; }
-      .fact { border:1px solid var(--line); border-radius:8px; padding:12px; background:rgba(246,250,247,.7); }
+      .fact { border:1px solid var(--line); border-radius:8px; padding:12px; background:rgba(246,250,247,.7); transition:background .2s ease,border-color .2s ease; }
+      .fact.primary { border-color:color-mix(in srgb,var(--grade) 24%,var(--line)); background:var(--grade-soft); }
       .fact span { display:block; color:var(--muted); font-size:.78rem; font-weight:800; text-transform:uppercase; }
       .fact strong { display:block; margin-top:4px; font-size:1.12rem; overflow-wrap:anywhere; }
       .probabilities { display:grid; gap:10px; margin-top:20px; }
-      .row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:12px; border-top:1px solid var(--line); padding-top:10px; color:var(--muted); }
-      .row strong { color:var(--ink); } .error { color:var(--bad); font-weight:800; }
+      .prob-row { display:grid; gap:7px; border-top:1px solid var(--line); padding-top:10px; }
+      .prob-head { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:12px; color:var(--muted); }
+      .prob-head strong { color:var(--ink); text-transform:capitalize; }
+      .prob-track { height:9px; border-radius:999px; background:#e4ece7; overflow:hidden; }
+      .prob-fill { display:block; height:100%; width:0%; border-radius:999px; background:var(--grade); transition:width .65s cubic-bezier(.2,.8,.2,1); }
+      .error { color:var(--bad); font-weight:800; }
       .work { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
-      .step { border:1px solid var(--line); border-radius:8px; background:white; padding:12px; min-height:96px; }
+      .step { border:1px solid var(--line); border-radius:8px; background:white; padding:12px; min-height:96px; transition:transform .22s ease,border-color .22s ease,background .22s ease,box-shadow .22s ease; }
+      .step:hover { transform:translateY(-1px); }
       .step b { display:block; margin-bottom:6px; color:var(--ink); }
       .step p { margin:0; color:var(--muted); line-height:1.42; font-size:.92rem; }
-      .step.active { border-color:#86b995; background:#f1f8f3; }
+      .step.active { border-color:#86b995; background:#f1f8f3; box-shadow:0 0 0 3px rgba(36,122,69,.08),0 14px 32px rgba(23,33,27,.08); animation:stepGlow 1.4s ease-in-out infinite alternate; }
       .step.done { border-color:#b8d8bf; background:#f7fbf8; }
       .process { margin-top:18px; border:1px solid var(--line); border-radius:8px; background:var(--soft); padding:12px; }
       .process-head { display:flex; justify-content:space-between; gap:12px; color:var(--muted); font-size:.9rem; font-weight:800; }
       .process-text { margin:8px 0 0; color:var(--ink); line-height:1.45; }
       .mini { color:var(--muted); font-size:.9rem; }
+      @keyframes pageIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
+      @keyframes scan { 0% { transform:translateX(-100%); } 62%,100% { transform:translateX(100%); } }
+      @keyframes stepGlow { from { box-shadow:0 0 0 2px rgba(36,122,69,.08),0 14px 32px rgba(23,33,27,.08); } to { box-shadow:0 0 0 5px rgba(36,122,69,.14),0 18px 40px rgba(23,33,27,.10); } }
+      @keyframes resultPulse { 0% { transform:scale(.94); } 45% { transform:scale(1.08); } 100% { transform:scale(1); } }
       @media (max-width:920px) { header,.grid { display:grid; grid-template-columns:1fr; } .work { grid-template-columns:repeat(2,minmax(0,1fr)); } }
       @media (max-width:560px) { .controls,.camera-controls,.facts,.work { grid-template-columns:1fr; } }
+      @media (prefers-reduced-motion:reduce) { *,*::before,*::after { animation:none!important; transition:none!important; scroll-behavior:auto!important; } }
     </style>
   </head>
   <body>
@@ -536,37 +564,41 @@ def root():
           <form id="form" class="controls"><input id="file" name="file" type="file" accept="image/*"><button id="submit" type="submit">Analyze</button></form>
           <div class="camera-controls"><button id="cameraButton" class="secondary" type="button">Start Camera</button><button id="captureButton" class="neutral" type="button" disabled>Capture Frame</button><label class="toggle"><input id="robustMode" type="checkbox" checked><span>Robust Camera</span></label></div>
         </div>
-        <aside class="panel">
-          <p class="eyebrow">Quality Grade</p><h2 id="title">Waiting for image</h2>
-          <p id="detail" class="detail">The main result is quality and A/B/C grade. Fruit name is supporting context.</p>
-          <div class="facts"><div class="fact"><span>Grade</span><strong id="gradeName">Not graded</strong></div><div class="fact"><span>Quality</span><strong id="qualityName">Waiting</strong></div><div class="fact"><span>Fruit</span><strong id="fruitName">Not detected</strong></div><div class="fact"><span>Confidence</span><strong id="confidenceName">Waiting</strong></div></div>
+        <aside id="resultPanel" class="panel result-panel">
+          <p class="eyebrow">Quality Grade</p>
+          <div class="result-hero"><div id="gradeBadge" class="grade-badge">--</div><div><h2 id="title">Waiting for image</h2><p id="detail" class="detail">The main result is quality and A/B/C grade. Fruit name is supporting context.</p></div></div>
+          <div class="facts"><div class="fact primary"><span>Grade</span><strong id="gradeName">Not graded</strong></div><div class="fact"><span>Quality</span><strong id="qualityName">Waiting</strong></div><div class="fact"><span>Fruit</span><strong id="fruitName">Not detected</strong></div><div class="fact"><span>Confidence</span><strong id="confidenceName">Waiting</strong></div></div>
           <div class="process"><div class="process-head"><span>Current process</span><span id="processTime">Idle</span></div><p id="processText" class="process-text">Select an image to begin.</p></div>
           <div id="probabilities" class="probabilities"></div>
         </aside>
       </section>
     </main>
     <script>
-      const form=document.querySelector("#form"),file=document.querySelector("#file"),statusEl=document.querySelector("#status"),submit=document.querySelector("#submit"),preview=document.querySelector("#preview"),camera=document.querySelector("#camera"),canvas=document.querySelector("#canvas"),cameraButton=document.querySelector("#cameraButton"),captureButton=document.querySelector("#captureButton"),robustMode=document.querySelector("#robustMode"),placeholder=document.querySelector("#placeholder"),title=document.querySelector("#title"),detail=document.querySelector("#detail"),gradeName=document.querySelector("#gradeName"),qualityName=document.querySelector("#qualityName"),fruitName=document.querySelector("#fruitName"),confidenceName=document.querySelector("#confidenceName"),probabilities=document.querySelector("#probabilities"),loading=document.querySelector("#loading"),loadingTitle=document.querySelector("#loadingTitle"),loadingDetail=document.querySelector("#loadingDetail"),eta=document.querySelector("#eta"),progressBar=document.querySelector("#progressBar"),processText=document.querySelector("#processText"),processTime=document.querySelector("#processTime"),steps=[...document.querySelectorAll(".step")];
+      const form=document.querySelector("#form"),file=document.querySelector("#file"),statusEl=document.querySelector("#status"),submit=document.querySelector("#submit"),preview=document.querySelector("#preview"),camera=document.querySelector("#camera"),canvas=document.querySelector("#canvas"),cameraButton=document.querySelector("#cameraButton"),captureButton=document.querySelector("#captureButton"),robustMode=document.querySelector("#robustMode"),placeholder=document.querySelector("#placeholder"),resultPanel=document.querySelector("#resultPanel"),gradeBadge=document.querySelector("#gradeBadge"),title=document.querySelector("#title"),detail=document.querySelector("#detail"),gradeName=document.querySelector("#gradeName"),qualityName=document.querySelector("#qualityName"),fruitName=document.querySelector("#fruitName"),confidenceName=document.querySelector("#confidenceName"),probabilities=document.querySelector("#probabilities"),loading=document.querySelector("#loading"),loadingTitle=document.querySelector("#loadingTitle"),loadingDetail=document.querySelector("#loadingDetail"),eta=document.querySelector("#eta"),progressBar=document.querySelector("#progressBar"),processText=document.querySelector("#processText"),processTime=document.querySelector("#processTime"),steps=[...document.querySelectorAll(".step")];
       let stream=null,capturedBlob=null,progressTimer=null,startedAt=0;
       const pipeline=[{t:0,p:8,title:"Reading image",text:"Preparing the selected image for analysis.",step:0},{t:1200,p:24,title:"Cleaning frame",text:"Applying robust camera cleanup when enabled.",step:1},{t:2800,p:46,title:"Checking fruit",text:"Running object detection and fruit-name checks.",step:2},{t:5200,p:70,title:"Grading quality",text:"Running quality classification for Fresh, Adulterant, or Rotten.",step:3},{t:8200,p:88,title:"Drawing result",text:"Building the annotated image and result panel.",step:3}];
+      function setStatus(text,mode=""){statusEl.textContent=text;statusEl.className="status"+(mode?" "+mode:"");}
       function setWorkflow(index,done=false){steps.forEach((el,i)=>{el.classList.toggle("active",i===index&&!done);el.classList.toggle("done",i<index||done);});}
       function setProcess(text,time){processText.textContent=text;processTime.textContent=time;}
-      function showError(message){stopProgress();title.textContent="Analysis failed";detail.innerHTML='<span class="error">'+message+"</span>";statusEl.textContent="Error";setProcess(message,"Error");loading.style.display="none";}
-      function startProgress(){startedAt=Date.now();loading.style.display="flex";submit.disabled=true;probabilities.innerHTML="";progressBar.style.width="4%";setWorkflow(0);progressTimer=setInterval(()=>{const elapsed=Date.now()-startedAt;let current=pipeline[0];for(const item of pipeline){if(elapsed>=item.t)current=item;}const softProgress=Math.min(94,current.p+Math.max(0,(elapsed-current.t)/95));const remain=Math.max(2,Math.ceil((10500-elapsed)/1000));loadingTitle.textContent=current.title;loadingDetail.textContent=current.text;eta.textContent="Estimated time: about "+remain+"s";progressBar.style.width=Math.min(94,softProgress)+"%";statusEl.textContent=current.title;setWorkflow(current.step);setProcess(current.text,"About "+remain+"s left");},250);}
+      function lockControls(locked){submit.disabled=locked;cameraButton.disabled=locked;file.disabled=locked;robustMode.disabled=locked;captureButton.disabled=locked||!stream;}
+      function showError(message){stopProgress();lockControls(false);title.textContent="Analysis failed";detail.innerHTML='<span class="error">'+message+"</span>";setStatus("Error","error-state");setProcess(message,"Error");loading.style.display="none";}
+      function startProgress(){startedAt=Date.now();loading.style.display="flex";lockControls(true);probabilities.innerHTML="";progressBar.style.width="4%";setWorkflow(0);setStatus("Analyzing","analyzing");progressTimer=setInterval(()=>{const elapsed=Date.now()-startedAt;let current=pipeline[0];for(const item of pipeline){if(elapsed>=item.t)current=item;}const softProgress=Math.min(94,current.p+Math.max(0,(elapsed-current.t)/95));const remain=Math.max(2,Math.ceil((10500-elapsed)/1000));loadingTitle.textContent=current.title;loadingDetail.textContent=current.text;eta.textContent="Estimated time: about "+remain+"s";progressBar.style.width=Math.min(94,softProgress)+"%";setStatus(current.title,"analyzing");setWorkflow(current.step);setProcess(current.text,"About "+remain+"s left");},250);}
       function stopProgress(){if(progressTimer){clearInterval(progressTimer);progressTimer=null;}}
       function finishProgress(){stopProgress();progressBar.style.width="100%";loadingTitle.textContent="Result ready";loadingDetail.textContent="Analysis complete.";eta.textContent="Estimated time: done";setWorkflow(3,true);setProcess("Analysis complete. Result is shown above.","Done");setTimeout(()=>{loading.style.display="none";},250);}
-      function stopCamera(){if(!stream)return;stream.getTracks().forEach(t=>t.stop());stream=null;camera.style.display="none";cameraButton.textContent="Start Camera";captureButton.disabled=true;}
-      function showPreview(src){preview.src=src;preview.style.display="block";camera.style.display="none";placeholder.style.display="none";}
+      function stopCamera(){if(!stream)return;stream.getTracks().forEach(t=>t.stop());stream=null;camera.classList.remove("visible");camera.style.display="none";cameraButton.textContent="Start Camera";captureButton.disabled=true;}
+      function showPreview(src){preview.classList.remove("visible");preview.src=src;preview.style.display="block";requestAnimationFrame(()=>preview.classList.add("visible"));camera.classList.remove("visible");camera.style.display="none";placeholder.style.display="none";}
+      function applyGradeState(overall){const grade=(overall.grade||"").toLowerCase();resultPanel.classList.remove("grade-a","grade-b","grade-c","result-flash");if(grade==="a")resultPanel.classList.add("grade-a");else if(grade==="b")resultPanel.classList.add("grade-b");else if(grade==="c")resultPanel.classList.add("grade-c");gradeBadge.textContent=overall.grade||"--";requestAnimationFrame(()=>{resultPanel.classList.add("result-flash");setTimeout(()=>resultPanel.classList.remove("result-flash"),720);});}
+      function renderProbabilities(items){probabilities.innerHTML=Object.entries(items||{}).map(([k,v])=>{const pct=Math.round((Number(v)||0)*100);return '<div class="prob-row"><div class="prob-head"><strong>'+k+'</strong><span>'+pct+'%</span></div><div class="prob-track"><span class="prob-fill" data-pct="'+pct+'"></span></div></div>';}).join("");requestAnimationFrame(()=>document.querySelectorAll(".prob-fill").forEach(el=>{el.style.width=el.dataset.pct+"%";}));}
       function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
       function frameScore(imageData,width,height){const data=imageData.data;let edge=0,bright=0,samples=0;const step=Math.max(2,Math.floor(Math.min(width,height)/180));for(let y=step;y<height-step;y+=step){for(let x=step;x<width-step;x+=step){const i=(y*width+x)*4,l=(y*width+x-step)*4,u=((y-step)*width+x)*4;const g=data[i]*.299+data[i+1]*.587+data[i+2]*.114,gl=data[l]*.299+data[l+1]*.587+data[l+2]*.114,gu=data[u]*.299+data[u+1]*.587+data[u+2]*.114;edge+=Math.abs(g-gl)+Math.abs(g-gu);bright+=g;samples++;}}return edge/Math.max(1,samples)-Math.abs(bright/Math.max(1,samples)-132)*.45;}
       function drawVideoFrame(){const width=camera.videoWidth||1280,height=camera.videoHeight||720;canvas.width=width;canvas.height=height;const ctx=canvas.getContext("2d",{willReadFrequently:true});ctx.drawImage(camera,0,0,width,height);const imageData=ctx.getImageData(0,0,width,height);return{width,height,imageData,score:frameScore(imageData,width,height)};}
       function enhanceFrame(frame){const out=document.createElement("canvas");out.width=frame.width;out.height=frame.height;const ctx=out.getContext("2d");ctx.putImageData(frame.imageData,0,0);if(!robustMode.checked)return out;const filtered=document.createElement("canvas");filtered.width=frame.width;filtered.height=frame.height;const fctx=filtered.getContext("2d");fctx.filter="contrast(1.18) saturate(1.08) brightness(1.04)";fctx.drawImage(out,0,0);return filtered;}
       function canvasToBlob(source){return new Promise(resolve=>source.toBlob(blob=>resolve(blob),"image/jpeg",robustMode.checked?0.95:0.92));}
       async function captureCameraBlob(){const count=robustMode.checked?8:1;let best=null;for(let i=0;i<count;i++){const frame=drawVideoFrame();if(!best||frame.score>best.score)best=frame;if(i<count-1)await sleep(90);}return await canvasToBlob(enhanceFrame(best));}
-      file.addEventListener("change",()=>{capturedBlob=null;if(!file.files.length)return;stopCamera();showPreview(URL.createObjectURL(file.files[0]));statusEl.textContent="Image ready";setWorkflow(0);setProcess("Image loaded. Press Analyze to start grading.","Ready");});
-      cameraButton.addEventListener("click",async()=>{if(stream){stopCamera();return;}try{stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"},audio:false});camera.srcObject=stream;await camera.play();preview.style.display="none";placeholder.style.display="none";camera.style.display="block";cameraButton.textContent="Stop Camera";captureButton.disabled=false;statusEl.textContent="Camera live";setProcess("Camera is live. Capture a frame when the fruit is clear.","Live");}catch(e){showError("Camera permission was denied or no camera is available.");}});
-      captureButton.addEventListener("click",async()=>{if(!stream)return;captureButton.disabled=true;statusEl.textContent=robustMode.checked?"Capturing best frame...":"Capturing...";setProcess(robustMode.checked?"Capturing multiple frames and choosing the sharpest one.":"Capturing one frame.","Capturing");try{capturedBlob=await captureCameraBlob();file.value="";showPreview(URL.createObjectURL(capturedBlob));stopCamera();statusEl.textContent="Frame ready";setProcess("Frame captured. Press Analyze to start grading.","Ready");}catch(e){showError("Could not capture a clean camera frame.");captureButton.disabled=false;}});
-      form.addEventListener("submit",async(event)=>{event.preventDefault();if(!file.files.length&&!capturedBlob){showError("Choose an image or capture a camera frame first.");return;}startProgress();const data=new FormData();data.append("file",capturedBlob||file.files[0],capturedBlob?"camera-robust-frame.jpg":file.files[0].name);if(capturedBlob&&robustMode.checked)data.append("robust_camera","true");try{const response=await fetch("/detect",{method:"POST",body:data});const result=await response.json();if(!response.ok)throw new Error(result.detail||"Backend could not grade this image.");const overall=result.overall||{},fruit=result.fruit||{};finishProgress();title.textContent=(overall.grade||"?")+" - "+(overall.label||"Quality");gradeName.textContent=overall.grade_label||overall.grade||"Unknown";qualityName.textContent=overall.label||"Unknown";fruitName.textContent=fruit.label||"Unknown";confidenceName.textContent=Math.round((overall.class_conf||0)*100)+"%";detail.textContent="Fruit: "+(fruit.label||"Unknown")+" ("+Math.round((fruit.confidence||0)*100)+"%). Quality confidence: "+Math.round((overall.class_conf||0)*100)+"%.";preview.src="data:image/jpeg;base64,"+result.annotated_image;preview.style.display="block";placeholder.style.display="none";statusEl.textContent="Done";probabilities.innerHTML=Object.entries(overall.probabilities||{}).map(([k,v])=>'<div class="row"><strong>'+k+'</strong><span>'+Math.round(v*100)+'%</span></div>').join("");}catch(error){showError(error.message||"Unknown error");}finally{submit.disabled=false;}});
+      file.addEventListener("change",()=>{capturedBlob=null;if(!file.files.length)return;stopCamera();showPreview(URL.createObjectURL(file.files[0]));setStatus("Image ready");setWorkflow(0);setProcess("Image loaded. Press Analyze to start grading.","Ready");});
+      cameraButton.addEventListener("click",async()=>{if(stream){stopCamera();return;}try{stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"},audio:false});camera.srcObject=stream;await camera.play();preview.classList.remove("visible");preview.style.display="none";placeholder.style.display="none";camera.style.display="block";requestAnimationFrame(()=>camera.classList.add("visible"));cameraButton.textContent="Stop Camera";captureButton.disabled=false;setStatus("Camera live");setProcess("Camera is live. Capture a frame when the fruit is clear.","Live");}catch(e){showError("Camera permission was denied or no camera is available.");}});
+      captureButton.addEventListener("click",async()=>{if(!stream)return;captureButton.disabled=true;setStatus(robustMode.checked?"Capturing best frame...":"Capturing...","analyzing");setProcess(robustMode.checked?"Capturing multiple frames and choosing the sharpest one.":"Capturing one frame.","Capturing");try{capturedBlob=await captureCameraBlob();file.value="";showPreview(URL.createObjectURL(capturedBlob));stopCamera();setStatus("Frame ready");setProcess("Frame captured. Press Analyze to start grading.","Ready");}catch(e){showError("Could not capture a clean camera frame.");captureButton.disabled=false;}});
+      form.addEventListener("submit",async(event)=>{event.preventDefault();if(!file.files.length&&!capturedBlob){showError("Choose an image or capture a camera frame first.");return;}startProgress();const data=new FormData();data.append("file",capturedBlob||file.files[0],capturedBlob?"camera-robust-frame.jpg":file.files[0].name);if(capturedBlob&&robustMode.checked)data.append("robust_camera","true");try{const response=await fetch("/detect",{method:"POST",body:data});const result=await response.json();if(!response.ok)throw new Error(result.detail||"Backend could not grade this image.");const overall=result.overall||{},fruit=result.fruit||{};finishProgress();applyGradeState(overall);title.textContent=(overall.grade||"?")+" - "+(overall.label||"Quality");gradeName.textContent=overall.grade_label||overall.grade||"Unknown";qualityName.textContent=overall.label||"Unknown";fruitName.textContent=fruit.label||"Unknown";confidenceName.textContent=Math.round((overall.class_conf||0)*100)+"%";detail.textContent="Fruit: "+(fruit.label||"Unknown")+" ("+Math.round((fruit.confidence||0)*100)+"%). Quality confidence: "+Math.round((overall.class_conf||0)*100)+"%.";showPreview("data:image/jpeg;base64,"+result.annotated_image);setStatus("Done","done");renderProbabilities(overall.probabilities||{});}catch(error){showError(error.message||"Unknown error");}finally{lockControls(false);}});
     </script>
   </body>
 </html>
