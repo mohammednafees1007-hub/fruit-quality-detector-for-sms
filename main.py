@@ -464,21 +464,28 @@ def root():
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Fruit Quality Detector for SMS</title>
     <style>
-      :root { --ink:#17211b; --muted:#5d6b62; --line:#dbe4df; --paper:#f6faf7; --leaf:#247a45; --bad:#bd2442; }
+      :root { --ink:#17211b; --muted:#5d6b62; --line:#d8e2dc; --paper:#f4f8f5; --leaf:#247a45; --leaf-2:#15552d; --blue:#1f5c80; --amber:#a86612; --bad:#bd2442; --soft:#eef5f0; }
       * { box-sizing:border-box; }
-      body { margin:0; min-height:100vh; font-family:Inter,system-ui,Segoe UI,sans-serif; background:linear-gradient(120deg,rgba(36,122,69,.12),transparent 40%),var(--paper); color:var(--ink); }
-      main { width:min(1080px,calc(100% - 32px)); margin:0 auto; padding:32px 0; display:grid; gap:20px; }
-      header { display:flex; justify-content:space-between; align-items:end; gap:16px; }
-      h1 { margin:0; font-size:clamp(2rem,6vw,4.6rem); line-height:.95; letter-spacing:0; }
-      .eyebrow { margin:0 0 8px; color:#15552d; font-weight:800; font-size:.78rem; text-transform:uppercase; }
+      body { margin:0; min-height:100vh; font-family:Inter,system-ui,Segoe UI,sans-serif; background:linear-gradient(120deg,rgba(36,122,69,.10),transparent 38%),linear-gradient(180deg,#fbfdfb,var(--paper)); color:var(--ink); }
+      main { width:min(1180px,calc(100% - 32px)); margin:0 auto; padding:28px 0; display:grid; gap:18px; }
+      header { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:end; gap:16px; }
+      h1 { margin:0; font-size:clamp(2rem,5vw,4rem); line-height:.98; letter-spacing:0; }
+      .lead { margin:10px 0 0; color:var(--muted); max-width:760px; line-height:1.55; }
+      .eyebrow { margin:0 0 8px; color:var(--leaf-2); font-weight:800; font-size:.78rem; text-transform:uppercase; }
       .status,.panel { border:1px solid var(--line); border-radius:8px; background:rgba(255,255,255,.88); }
-      .status { padding:10px 12px; color:var(--muted); min-width:150px; text-align:center; }
-      .grid { display:grid; grid-template-columns:minmax(0,1.15fr) minmax(320px,.85fr); gap:18px; }
-      .panel { box-shadow:0 18px 50px rgba(23,33,27,.12); padding:16px; }
-      .preview { aspect-ratio:4/3; border-radius:8px; background:#dce8df; overflow:hidden; display:grid; place-items:center; }
+      .status { padding:10px 12px; color:var(--muted); min-width:150px; text-align:center; font-weight:800; }
+      .grid { display:grid; grid-template-columns:minmax(0,1.08fr) minmax(340px,.92fr); gap:18px; }
+      .panel { box-shadow:0 18px 50px rgba(23,33,27,.10); padding:16px; }
+      .preview { aspect-ratio:4/3; border-radius:8px; background:#dce8df; overflow:hidden; display:grid; place-items:center; position:relative; }
       .preview img,.preview video { width:100%; height:100%; object-fit:contain; display:none; }
       .preview video { object-fit:cover; }
       .placeholder { color:var(--muted); font-weight:700; text-align:center; padding:24px; }
+      .loading { position:absolute; inset:0; background:rgba(246,250,247,.88); display:none; align-items:center; justify-content:center; padding:22px; backdrop-filter:blur(3px); }
+      .loading-card { width:min(420px,100%); border:1px solid var(--line); border-radius:8px; background:white; padding:18px; box-shadow:0 14px 40px rgba(23,33,27,.12); }
+      .loading-title { margin:0; font-size:1.2rem; font-weight:900; }
+      .eta { margin:6px 0 12px; color:var(--muted); }
+      .bar { height:10px; border-radius:999px; background:#e4ece7; overflow:hidden; }
+      .bar span { display:block; height:100%; width:0%; background:linear-gradient(90deg,var(--leaf),#62a34d); transition:width .25s ease; }
       .controls { display:grid; grid-template-columns:1fr auto; gap:10px; margin-top:14px; }
       .camera-controls { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin-top:10px; }
       input[type=file] { width:100%; border:1px solid var(--line); border-radius:8px; background:white; padding:10px; }
@@ -495,18 +502,36 @@ def root():
       .probabilities { display:grid; gap:10px; margin-top:20px; }
       .row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:12px; border-top:1px solid var(--line); padding-top:10px; color:var(--muted); }
       .row strong { color:var(--ink); } .error { color:var(--bad); font-weight:800; }
-      @media (max-width:820px) { header,.grid { display:grid; grid-template-columns:1fr; } .controls,.camera-controls { grid-template-columns:1fr; } }
+      .work { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
+      .step { border:1px solid var(--line); border-radius:8px; background:white; padding:12px; min-height:96px; }
+      .step b { display:block; margin-bottom:6px; color:var(--ink); }
+      .step p { margin:0; color:var(--muted); line-height:1.42; font-size:.92rem; }
+      .step.active { border-color:#86b995; background:#f1f8f3; }
+      .step.done { border-color:#b8d8bf; background:#f7fbf8; }
+      .process { margin-top:18px; border:1px solid var(--line); border-radius:8px; background:var(--soft); padding:12px; }
+      .process-head { display:flex; justify-content:space-between; gap:12px; color:var(--muted); font-size:.9rem; font-weight:800; }
+      .process-text { margin:8px 0 0; color:var(--ink); line-height:1.45; }
+      .mini { color:var(--muted); font-size:.9rem; }
+      @media (max-width:920px) { header,.grid { display:grid; grid-template-columns:1fr; } .work { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+      @media (max-width:560px) { .controls,.camera-controls,.facts,.work { grid-template-columns:1fr; } }
     </style>
   </head>
   <body>
     <main>
-      <header><div><p class="eyebrow">SMS quality grading system</p><h1>Fruit Quality Detector for SMS</h1></div><div id="status" class="status">Ready</div></header>
+      <header><div><p class="eyebrow">SMS quality grading system</p><h1>Fruit Quality Detector for SMS</h1><p class="lead">Upload or capture a fruit image. The app cleans the frame when robust mode is enabled, detects fruit context, grades quality, and returns an annotated result.</p></div><div id="status" class="status">Ready</div></header>
+      <section class="work" aria-label="Analysis workflow">
+        <div class="step" data-step="0"><b>1. Image input</b><p>Upload a file or capture a camera frame.</p></div>
+        <div class="step" data-step="1"><b>2. Frame cleanup</b><p>Robust mode improves screen or camera captures.</p></div>
+        <div class="step" data-step="2"><b>3. Fruit check</b><p>Detection and fruit-name checks run on the image.</p></div>
+        <div class="step" data-step="3"><b>4. Grade result</b><p>Quality is mapped to Grade A, B, or C.</p></div>
+      </section>
       <section class="grid">
         <div class="panel">
           <div class="preview">
             <img id="preview" alt="Analysis result"><video id="camera" autoplay playsinline muted></video>
             <canvas id="canvas" width="1280" height="720" hidden></canvas>
             <div id="placeholder" class="placeholder">Choose a fruit image or capture from camera.</div>
+            <div id="loading" class="loading"><div class="loading-card"><p id="loadingTitle" class="loading-title">Preparing image</p><p id="eta" class="eta">Estimated time: --</p><div class="bar"><span id="progressBar"></span></div><p id="loadingDetail" class="detail">Waiting for upload.</p></div></div>
           </div>
           <form id="form" class="controls"><input id="file" name="file" type="file" accept="image/*"><button id="submit" type="submit">Analyze</button></form>
           <div class="camera-controls"><button id="cameraButton" class="secondary" type="button">Start Camera</button><button id="captureButton" class="neutral" type="button" disabled>Capture Frame</button><label class="toggle"><input id="robustMode" type="checkbox" checked><span>Robust Camera</span></label></div>
@@ -514,15 +539,22 @@ def root():
         <aside class="panel">
           <p class="eyebrow">Quality Grade</p><h2 id="title">Waiting for image</h2>
           <p id="detail" class="detail">The main result is quality and A/B/C grade. Fruit name is supporting context.</p>
-          <div class="facts"><div class="fact"><span>Grade</span><strong id="gradeName">Not graded</strong></div><div class="fact"><span>Quality</span><strong id="qualityName">Waiting</strong></div><div class="fact"><span>Fruit</span><strong id="fruitName">Not detected</strong></div><div class="fact"><span>Model</span><strong id="sourceName">Upload or camera</strong></div></div>
+          <div class="facts"><div class="fact"><span>Grade</span><strong id="gradeName">Not graded</strong></div><div class="fact"><span>Quality</span><strong id="qualityName">Waiting</strong></div><div class="fact"><span>Fruit</span><strong id="fruitName">Not detected</strong></div><div class="fact"><span>Confidence</span><strong id="confidenceName">Waiting</strong></div></div>
+          <div class="process"><div class="process-head"><span>Current process</span><span id="processTime">Idle</span></div><p id="processText" class="process-text">Select an image to begin.</p></div>
           <div id="probabilities" class="probabilities"></div>
         </aside>
       </section>
     </main>
     <script>
-      const form=document.querySelector("#form"),file=document.querySelector("#file"),statusEl=document.querySelector("#status"),submit=document.querySelector("#submit"),preview=document.querySelector("#preview"),camera=document.querySelector("#camera"),canvas=document.querySelector("#canvas"),cameraButton=document.querySelector("#cameraButton"),captureButton=document.querySelector("#captureButton"),robustMode=document.querySelector("#robustMode"),placeholder=document.querySelector("#placeholder"),title=document.querySelector("#title"),detail=document.querySelector("#detail"),gradeName=document.querySelector("#gradeName"),qualityName=document.querySelector("#qualityName"),fruitName=document.querySelector("#fruitName"),sourceName=document.querySelector("#sourceName"),probabilities=document.querySelector("#probabilities");
-      let stream=null,capturedBlob=null;
-      function showError(message){title.textContent="Analysis failed";detail.innerHTML='<span class="error">'+message+"</span>";statusEl.textContent="Error";}
+      const form=document.querySelector("#form"),file=document.querySelector("#file"),statusEl=document.querySelector("#status"),submit=document.querySelector("#submit"),preview=document.querySelector("#preview"),camera=document.querySelector("#camera"),canvas=document.querySelector("#canvas"),cameraButton=document.querySelector("#cameraButton"),captureButton=document.querySelector("#captureButton"),robustMode=document.querySelector("#robustMode"),placeholder=document.querySelector("#placeholder"),title=document.querySelector("#title"),detail=document.querySelector("#detail"),gradeName=document.querySelector("#gradeName"),qualityName=document.querySelector("#qualityName"),fruitName=document.querySelector("#fruitName"),confidenceName=document.querySelector("#confidenceName"),probabilities=document.querySelector("#probabilities"),loading=document.querySelector("#loading"),loadingTitle=document.querySelector("#loadingTitle"),loadingDetail=document.querySelector("#loadingDetail"),eta=document.querySelector("#eta"),progressBar=document.querySelector("#progressBar"),processText=document.querySelector("#processText"),processTime=document.querySelector("#processTime"),steps=[...document.querySelectorAll(".step")];
+      let stream=null,capturedBlob=null,progressTimer=null,startedAt=0;
+      const pipeline=[{t:0,p:8,title:"Reading image",text:"Preparing the selected image for analysis.",step:0},{t:1200,p:24,title:"Cleaning frame",text:"Applying robust camera cleanup when enabled.",step:1},{t:2800,p:46,title:"Checking fruit",text:"Running object detection and fruit-name checks.",step:2},{t:5200,p:70,title:"Grading quality",text:"Running quality classification for Fresh, Adulterant, or Rotten.",step:3},{t:8200,p:88,title:"Drawing result",text:"Building the annotated image and result panel.",step:3}];
+      function setWorkflow(index,done=false){steps.forEach((el,i)=>{el.classList.toggle("active",i===index&&!done);el.classList.toggle("done",i<index||done);});}
+      function setProcess(text,time){processText.textContent=text;processTime.textContent=time;}
+      function showError(message){stopProgress();title.textContent="Analysis failed";detail.innerHTML='<span class="error">'+message+"</span>";statusEl.textContent="Error";setProcess(message,"Error");loading.style.display="none";}
+      function startProgress(){startedAt=Date.now();loading.style.display="flex";submit.disabled=true;probabilities.innerHTML="";progressBar.style.width="4%";setWorkflow(0);progressTimer=setInterval(()=>{const elapsed=Date.now()-startedAt;let current=pipeline[0];for(const item of pipeline){if(elapsed>=item.t)current=item;}const softProgress=Math.min(94,current.p+Math.max(0,(elapsed-current.t)/95));const remain=Math.max(2,Math.ceil((10500-elapsed)/1000));loadingTitle.textContent=current.title;loadingDetail.textContent=current.text;eta.textContent="Estimated time: about "+remain+"s";progressBar.style.width=Math.min(94,softProgress)+"%";statusEl.textContent=current.title;setWorkflow(current.step);setProcess(current.text,"About "+remain+"s left");},250);}
+      function stopProgress(){if(progressTimer){clearInterval(progressTimer);progressTimer=null;}}
+      function finishProgress(){stopProgress();progressBar.style.width="100%";loadingTitle.textContent="Result ready";loadingDetail.textContent="Analysis complete.";eta.textContent="Estimated time: done";setWorkflow(3,true);setProcess("Analysis complete. Result is shown above.","Done");setTimeout(()=>{loading.style.display="none";},250);}
       function stopCamera(){if(!stream)return;stream.getTracks().forEach(t=>t.stop());stream=null;camera.style.display="none";cameraButton.textContent="Start Camera";captureButton.disabled=true;}
       function showPreview(src){preview.src=src;preview.style.display="block";camera.style.display="none";placeholder.style.display="none";}
       function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
@@ -531,10 +563,10 @@ def root():
       function enhanceFrame(frame){const out=document.createElement("canvas");out.width=frame.width;out.height=frame.height;const ctx=out.getContext("2d");ctx.putImageData(frame.imageData,0,0);if(!robustMode.checked)return out;const filtered=document.createElement("canvas");filtered.width=frame.width;filtered.height=frame.height;const fctx=filtered.getContext("2d");fctx.filter="contrast(1.18) saturate(1.08) brightness(1.04)";fctx.drawImage(out,0,0);return filtered;}
       function canvasToBlob(source){return new Promise(resolve=>source.toBlob(blob=>resolve(blob),"image/jpeg",robustMode.checked?0.95:0.92));}
       async function captureCameraBlob(){const count=robustMode.checked?8:1;let best=null;for(let i=0;i<count;i++){const frame=drawVideoFrame();if(!best||frame.score>best.score)best=frame;if(i<count-1)await sleep(90);}return await canvasToBlob(enhanceFrame(best));}
-      file.addEventListener("change",()=>{capturedBlob=null;if(!file.files.length)return;stopCamera();showPreview(URL.createObjectURL(file.files[0]));sourceName.textContent="Uploaded image";});
-      cameraButton.addEventListener("click",async()=>{if(stream){stopCamera();return;}try{stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"},audio:false});camera.srcObject=stream;await camera.play();preview.style.display="none";placeholder.style.display="none";camera.style.display="block";cameraButton.textContent="Stop Camera";captureButton.disabled=false;sourceName.textContent="Live camera";}catch(e){showError("Camera permission was denied or no camera is available.");}});
-      captureButton.addEventListener("click",async()=>{if(!stream)return;captureButton.disabled=true;statusEl.textContent=robustMode.checked?"Capturing best frame...":"Capturing...";try{capturedBlob=await captureCameraBlob();file.value="";showPreview(URL.createObjectURL(capturedBlob));sourceName.textContent="Captured frame";stopCamera();statusEl.textContent="Frame ready";}catch(e){showError("Could not capture a clean camera frame.");captureButton.disabled=false;}});
-      form.addEventListener("submit",async(event)=>{event.preventDefault();if(!file.files.length&&!capturedBlob){showError("Choose an image or capture a camera frame first.");return;}statusEl.textContent="Grading...";submit.disabled=true;probabilities.innerHTML="";const data=new FormData();data.append("file",capturedBlob||file.files[0],capturedBlob?"camera-robust-frame.jpg":file.files[0].name);if(capturedBlob&&robustMode.checked)data.append("robust_camera","true");try{const response=await fetch("/detect",{method:"POST",body:data});const result=await response.json();if(!response.ok)throw new Error(result.detail||"Backend could not grade this image.");const overall=result.overall||{},fruit=result.fruit||{};title.textContent=(overall.grade||"?")+" - "+(overall.label||"Quality");gradeName.textContent=overall.grade_label||overall.grade||"Unknown";qualityName.textContent=overall.label||"Unknown";fruitName.textContent=fruit.label||"Unknown";sourceName.textContent=(overall.source||"quality model").toString();detail.textContent="Quality confidence: "+Math.round((overall.class_conf||0)*100)+"%. Fruit: "+(fruit.label||"Unknown")+" ("+Math.round((fruit.confidence||0)*100)+"%).";preview.src="data:image/jpeg;base64,"+result.annotated_image;preview.style.display="block";placeholder.style.display="none";statusEl.textContent="Done";probabilities.innerHTML=Object.entries(overall.probabilities||{}).map(([k,v])=>'<div class="row"><strong>'+k+'</strong><span>'+Math.round(v*100)+'%</span></div>').join("");}catch(error){showError(error.message||"Unknown error");}finally{submit.disabled=false;}});
+      file.addEventListener("change",()=>{capturedBlob=null;if(!file.files.length)return;stopCamera();showPreview(URL.createObjectURL(file.files[0]));statusEl.textContent="Image ready";setWorkflow(0);setProcess("Image loaded. Press Analyze to start grading.","Ready");});
+      cameraButton.addEventListener("click",async()=>{if(stream){stopCamera();return;}try{stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"},audio:false});camera.srcObject=stream;await camera.play();preview.style.display="none";placeholder.style.display="none";camera.style.display="block";cameraButton.textContent="Stop Camera";captureButton.disabled=false;statusEl.textContent="Camera live";setProcess("Camera is live. Capture a frame when the fruit is clear.","Live");}catch(e){showError("Camera permission was denied or no camera is available.");}});
+      captureButton.addEventListener("click",async()=>{if(!stream)return;captureButton.disabled=true;statusEl.textContent=robustMode.checked?"Capturing best frame...":"Capturing...";setProcess(robustMode.checked?"Capturing multiple frames and choosing the sharpest one.":"Capturing one frame.","Capturing");try{capturedBlob=await captureCameraBlob();file.value="";showPreview(URL.createObjectURL(capturedBlob));stopCamera();statusEl.textContent="Frame ready";setProcess("Frame captured. Press Analyze to start grading.","Ready");}catch(e){showError("Could not capture a clean camera frame.");captureButton.disabled=false;}});
+      form.addEventListener("submit",async(event)=>{event.preventDefault();if(!file.files.length&&!capturedBlob){showError("Choose an image or capture a camera frame first.");return;}startProgress();const data=new FormData();data.append("file",capturedBlob||file.files[0],capturedBlob?"camera-robust-frame.jpg":file.files[0].name);if(capturedBlob&&robustMode.checked)data.append("robust_camera","true");try{const response=await fetch("/detect",{method:"POST",body:data});const result=await response.json();if(!response.ok)throw new Error(result.detail||"Backend could not grade this image.");const overall=result.overall||{},fruit=result.fruit||{};finishProgress();title.textContent=(overall.grade||"?")+" - "+(overall.label||"Quality");gradeName.textContent=overall.grade_label||overall.grade||"Unknown";qualityName.textContent=overall.label||"Unknown";fruitName.textContent=fruit.label||"Unknown";confidenceName.textContent=Math.round((overall.class_conf||0)*100)+"%";detail.textContent="Fruit: "+(fruit.label||"Unknown")+" ("+Math.round((fruit.confidence||0)*100)+"%). Quality confidence: "+Math.round((overall.class_conf||0)*100)+"%.";preview.src="data:image/jpeg;base64,"+result.annotated_image;preview.style.display="block";placeholder.style.display="none";statusEl.textContent="Done";probabilities.innerHTML=Object.entries(overall.probabilities||{}).map(([k,v])=>'<div class="row"><strong>'+k+'</strong><span>'+Math.round(v*100)+'%</span></div>').join("");}catch(error){showError(error.message||"Unknown error");}finally{submit.disabled=false;}});
     </script>
   </body>
 </html>
