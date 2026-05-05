@@ -4,6 +4,26 @@ Quality-first fruit grading website built with FastAPI, TensorFlow/Keras, YOLOv8
 
 Repository: <https://github.com/mohammednafees1007-hub/fruit-quality-detector-for-sms>
 
+![Python](https://img.shields.io/badge/Python-3.12-blue)
+![FastAPI](https://img.shields.io/badge/FastAPI-Web%20API-009688)
+![TensorFlow](https://img.shields.io/badge/TensorFlow-Keras-orange)
+![YOLO](https://img.shields.io/badge/YOLOv8x-Detection-purple)
+![CLIP](https://img.shields.io/badge/CLIP-ViT--L%2F14-lightgrey)
+![Target](https://img.shields.io/badge/Future-Raspberry%20Pi%205-green)
+
+## Project Snapshot
+
+| Item | Details |
+| --- | --- |
+| Main goal | Fruit quality grading for SMS |
+| Primary output | `Quality` and `Grade` |
+| Quality classes | `Fresh`, `Adulterant`, `Rotten` |
+| Grade mapping | Fresh = A, Adulterant/Damaged = B, Rotten = C |
+| Current deployed quality model | MobileNetV2-based Keras classifier |
+| Current detector | YOLOv8x for fruit crop and annotation |
+| Current fruit-name model | CLIP ViT-L/14 with fallback models |
+| Future target device | Raspberry Pi 5 |
+
 ## Table of Contents
 
 - [Objective](#objective)
@@ -11,9 +31,11 @@ Repository: <https://github.com/mohammednafees1007-hub/fruit-quality-detector-fo
 - [Problem Statement](#problem-statement)
 - [Methodology](#methodology)
 - [System Components](#system-components)
+- [Model Strategy and Raspberry Pi 5 Rationale](#model-strategy-and-raspberry-pi-5-rationale)
 - [Workflow](#workflow)
 - [Algorithm](#algorithm)
 - [Implementation Details](#implementation-details)
+- [Raspberry Pi 5 Future Deployment Plan](#raspberry-pi-5-future-deployment-plan)
 - [Project Structure](#project-structure)
 - [Installation and Running](#installation-and-running)
 - [API Endpoints](#api-endpoints)
@@ -103,6 +125,113 @@ CLIP, YOLO, VGG19, and MobileNetV2 do not decide fruit quality. Only the trained
 | Custom YOLO training | `train_custom_yolo_fruits.py` | Future custom fruit detector training |
 | Fruits-360 YOLO prep | `prepare_fruits360_yolo.py` | Converts Fruits-360-style data to YOLO format |
 | Launcher | `run_website.bat` | Starts the website with one command |
+
+## Model Strategy and Raspberry Pi 5 Rationale
+
+This project uses more than one model because each model has a different job. The quality model is the main model. The detector and fruit-name model only support the user interface and help the system focus on the fruit.
+
+### Model Roles
+
+| Model | Used For | Why It Is Used Now | Why It Matters |
+| --- | --- | --- | --- |
+| MobileNetV2 Keras classifier | Quality grading | Lightweight enough to train and run locally, supports transfer learning, easier to convert for edge devices | Main model for Fresh / Adulterant / Rotten |
+| YOLOv8x | Fruit box detection | Strong detector on laptop/desktop, useful for clean crop and annotation | Helps quality model inspect fruit area |
+| CLIP ViT-L/14 | Fruit name | Strong zero-shot fruit naming across many fruit names | Gives fruit label without training every fruit class |
+| VGG19 / MobileNetV2 ImageNet | Fruit-name fallback | Backup if CLIP is unavailable | Not used for quality grading |
+| EfficientNetV2 / ConvNeXtTiny | Future quality model options | Stronger classification backbones | Candidate upgrades after GPU training |
+
+### Why MobileNetV2 Is the Current Quality Model
+
+MobileNetV2 is used as the currently deployed quality classifier because this project must run as a practical demo and later move toward Raspberry Pi 5 deployment. MobileNetV2 is smaller and faster than heavy models such as VGG19, ConvNeXtTiny, or large Vision Transformers.
+
+Reasons for using MobileNetV2 now:
+
+- It is lightweight compared with VGG19, ConvNeXt, and CLIP.
+- It supports transfer learning for image classification.
+- It can run on CPU more realistically than larger models.
+- It is a better starting point for Raspberry Pi 5 than very large models.
+- It can be converted later to TensorFlow Lite for edge deployment.
+- It produced the best usable result in the local CPU training setup.
+
+Current model file:
+
+```text
+models/fruit_quality_grader.keras
+```
+
+Current quality classes:
+
+```text
+adulterated
+fresh
+rotten
+```
+
+### Why YOLOv8x Is Used Now
+
+YOLOv8x is used in the current website because the laptop version can handle a stronger detector. Its job is to find the fruit area and draw bounding boxes. This helps the quality model receive a crop of the fruit instead of the full background.
+
+YOLOv8x is useful for the current laptop demo because:
+
+- It gives stronger detection than smaller YOLO variants.
+- It can detect fruit-like objects and provide bounding boxes.
+- It improves result presentation through annotated images.
+- It helps the classifier focus on the fruit region.
+
+However, YOLOv8x is not the best final choice for Raspberry Pi 5 because it is large and compute-heavy. On Raspberry Pi 5 CPU, it can be slow, memory-heavy, and may cause high temperature or low frame rate.
+
+### Why CLIP ViT-L/14 Is Used Now
+
+CLIP ViT-L/14 is used for fruit naming because it can recognize many fruit names without training a separate fruit-name classifier for every fruit. This is useful for a demo where the user may upload different fruit types.
+
+CLIP is not used for quality because freshness, damage, adulteration, and rot need a dedicated trained classifier. CLIP is good for general image-text matching, but it is not reliable enough to decide quality grade.
+
+CLIP ViT-L/14 is also not ideal for Raspberry Pi 5 because it is a large model. Running it on Pi CPU would likely be slow and memory-heavy. For Pi 5, fruit naming should be simplified or replaced by a smaller model.
+
+### Why VGG19 Is Only a Fallback
+
+VGG19 is an older convolutional neural network. It is useful for explanation and fallback classification, but it is not efficient for edge deployment.
+
+VGG19 is not the main model because:
+
+- It has many parameters.
+- It is slower than MobileNet-style models.
+- It is not optimized for Raspberry Pi 5.
+- It was trained on ImageNet, not specifically on this fruit quality dataset.
+
+### Better Model Options
+
+| Better Option | What It Would Improve | Why It Is Not the Current Default |
+| --- | --- | --- |
+| EfficientNetV2B0 / EfficientNetV2S | Better quality classification accuracy | Needs longer training and preferably GPU |
+| ConvNeXtTiny | Stronger modern CNN features | Heavier than MobileNetV2 and slower on Pi CPU |
+| YOLOv8n / YOLOv11n | Faster fruit detection on edge devices | Lower accuracy than YOLOv8x unless custom-trained |
+| YOLOv8n-seg / lightweight segmentation | Better fruit crop than box detection | Needs custom dataset and training |
+| TensorFlow Lite MobileNet/EfficientNet-Lite | Faster Pi inference | Requires conversion and Pi-side testing |
+| Hailo-compiled YOLO/classifier | Very fast on Pi with AI accelerator | Requires Raspberry Pi AI Kit / AI HAT+ and model conversion |
+
+### Why Not Use the Biggest Models on Raspberry Pi 5
+
+Raspberry Pi 5 is powerful for an embedded board, but it is still not the same as a laptop GPU. Heavy models may work slowly, but they are not ideal for a responsive camera-based grading system.
+
+Main constraints on Pi 5:
+
+- Limited CPU performance compared with laptop/GPU systems.
+- Limited RAM compared with development machines.
+- Camera inference needs low latency.
+- Large models increase startup time and memory use.
+- Continuous inference can increase temperature and throttle performance.
+- Some camera libraries, such as `picamera2`, must run on Raspberry Pi OS, not on Windows.
+
+For these reasons, the future Pi 5 version should use a smaller edge pipeline:
+
+```text
+Pi Camera
+  -> lightweight detector or segmentation model
+  -> TensorFlow Lite quality classifier
+  -> optional small fruit-name classifier
+  -> local FastAPI/Flask dashboard or laptop dashboard
+```
 
 ## Workflow
 
@@ -277,6 +406,82 @@ Priority:
 4. MobileNetV2 ImageNet fallback
 
 Fruit naming is helpful for display, but it is secondary to quality grading.
+
+## Raspberry Pi 5 Future Deployment Plan
+
+The current application is a laptop-first prototype. The future implementation goal is to deploy the system on Raspberry Pi 5 for portable fruit grading.
+
+### Target Pi 5 Architecture
+
+```text
+Raspberry Pi 5 + Pi Camera
+        |
+        v
+Camera capture service
+        |
+        v
+Lightweight fruit detector
+        |
+        v
+Fruit crop
+        |
+        v
+TensorFlow Lite quality classifier
+        |
+        v
+Fresh / Adulterant / Rotten
+        |
+        v
+Grade A / B / C
+        |
+        v
+Local web dashboard or SMS/laptop dashboard
+```
+
+### What Should Change for Pi 5
+
+| Current Laptop Version | Future Pi 5 Version | Reason |
+| --- | --- | --- |
+| YOLOv8x | YOLOv8n, YOLOv11n, YOLOv8n-seg, or Hailo YOLO | Smaller detector is faster on Pi |
+| Keras `.keras` model | TensorFlow Lite `.tflite` model | TFLite is better for edge inference |
+| CLIP ViT-L/14 fruit naming | Remove, simplify, or replace with small classifier | CLIP is too heavy for Pi CPU |
+| Browser camera | Pi Camera through Raspberry Pi OS | Pi camera stack is native to Pi |
+| Laptop CPU inference | Pi CPU or Pi AI accelerator inference | Need low latency and low power |
+| Full demo web stack | Lightweight local web dashboard | Pi should run only what is needed |
+
+### Recommended Pi 5 Model Stack
+
+Best practical future stack:
+
+```text
+Detection:
+  YOLOv8n / YOLOv11n / YOLOv8n-seg
+
+Quality:
+  MobileNetV2 TFLite or EfficientNet-Lite TFLite
+
+Fruit name:
+  Optional small classifier, or use YOLO class if custom detector is trained
+
+Acceleration:
+  Raspberry Pi AI Kit / AI HAT+ with Hailo model where available
+```
+
+This keeps the system realistic for Pi 5. The laptop can use YOLOv8x and CLIP for better presentation, but the Pi should prioritize speed, memory use, and stable camera inference.
+
+### Why Pi 5 Deployment Is Future Work
+
+The current repository is ready as a local website and training prototype, but Pi 5 deployment needs extra engineering:
+
+1. Convert the quality model to TensorFlow Lite.
+2. Benchmark inference speed on Raspberry Pi 5.
+3. Replace YOLOv8x with a smaller detector.
+4. Test the Pi Camera pipeline on Raspberry Pi OS.
+5. Add thermal and FPS checks.
+6. Optionally use Raspberry Pi AI Kit or AI HAT+ for acceleration.
+7. Package the app as a Pi service that starts on boot.
+
+The important point is that the future Pi 5 version should not directly copy the heavy laptop model stack. It should use the same grading logic but with edge-optimized models.
 
 ## Project Structure
 
@@ -538,34 +743,48 @@ The main achievement is that the system no longer depends on a visual quality fa
 
 ## Future Enhancements
 
-1. Train on the full FruitVision dataset
+1. Raspberry Pi 5 deployment
+   - Convert `fruit_quality_grader.keras` to TensorFlow Lite.
+   - Replace YOLOv8x with YOLOv8n, YOLOv11n, YOLOv8n-seg, or another lightweight detector.
+   - Run the camera pipeline using Raspberry Pi OS and Pi Camera.
+   - Benchmark FPS, memory use, model latency, and temperature.
+   - Add a startup service so the grading app runs automatically on boot.
+
+2. Raspberry Pi AI accelerator support
+   - Test Raspberry Pi AI Kit or AI HAT+.
+   - Compile supported models for Hailo acceleration.
+   - Keep CPU fallback for boards without the accelerator.
+
+3. Train on the full FruitVision dataset
    - Use fresh, rotten, and formalin-mixed classes directly.
    - Improve the adulterated/formalin class beyond pest-damage proxy labels.
 
-2. Train a stronger quality backbone
+4. Train a stronger quality backbone
    - Fine-tune EfficientNetV2S or ConvNeXtTiny on GPU.
    - Use more epochs and stronger validation monitoring.
    - Deploy the model with the best macro-F1.
+   - Convert the final selected model to TensorFlow Lite for Pi testing.
 
-3. Custom YOLO fruit detector
+5. Custom YOLO fruit detector
    - Train YOLO on fruit-specific bounding boxes.
    - Add more fruit classes.
    - Improve crop quality before grading.
+   - Create a smaller Pi-specific detector after training.
 
-4. Add explainability
+6. Add explainability
    - Add Grad-CAM heatmaps.
    - Show which image regions influenced quality prediction.
 
-5. Improve camera robustness
+7. Improve camera robustness
    - Add autofocus/exposure hints.
    - Add blur rejection.
    - Capture and average multiple robust predictions.
 
-6. Add grading history
+8. Add grading history
    - Store prediction date, image, fruit name, quality, grade, and confidence.
    - Export reports as CSV or PDF.
 
-7. Production deployment
+9. Production deployment
    - Add Docker support.
    - Add cloud deployment configuration.
    - Add authentication for real SMS usage.
@@ -582,3 +801,7 @@ The main achievement is that the system no longer depends on a visual quality fa
 8. Tan and Le. EfficientNetV2: Smaller Models and Faster Training. arXiv:2104.00298. <https://arxiv.org/abs/2104.00298>
 9. Liu et al. A ConvNet for the 2020s. arXiv:2201.03545. <https://arxiv.org/abs/2201.03545>
 10. TensorFlow Keras Applications documentation. <https://www.tensorflow.org/api_docs/python/tf/keras/applications>
+11. Raspberry Pi 5 product page. <https://www.raspberrypi.com/products/raspberry-pi-5/>
+12. Raspberry Pi 5 product brief. <https://datasheets.raspberrypi.com/rpi5/raspberry-pi-5-product-brief.pdf>
+13. Raspberry Pi AI HAT+ documentation. <https://www.raspberrypi.com/documentation/accessories/ai-hat-plus.html>
+14. TensorFlow Lite guide. <https://www.tensorflow.org/lite/guide>
