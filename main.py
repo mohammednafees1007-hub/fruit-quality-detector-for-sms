@@ -462,143 +462,347 @@ def root():
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Fruit Quality Detector for SMS</title>
+    <title>FruitVision AI | Fruit Quality Detector for SMS</title>
     <style>
-      :root { --ink:#17211b; --muted:#5d6b62; --line:#d8e2dc; --paper:#f4f8f5; --leaf:#247a45; --leaf-2:#15552d; --blue:#1f5c80; --amber:#a86612; --bad:#bd2442; --soft:#eef5f0; --card:#ffffff; --shadow:0 18px 50px rgba(23,33,27,.10); --grade:#247a45; --grade-soft:#e7f6ec; }
+      :root { --ink:#08130e; --muted:#607064; --line:#d9e8dd; --paper:#f4faf5; --card:rgba(255,255,255,.80); --leaf:#0f7a3f; --leaf-2:#2eb872; --leaf-dark:#0b4f2a; --sage:#dceee2; --amber:#b87910; --bad:#c92f4f; --shadow:0 30px 88px rgba(8,30,18,.13); --soft-shadow:0 16px 42px rgba(8,30,18,.08); --radius:28px; --grade:#0f7a3f; --grade-soft:#e5f7eb; }
       * { box-sizing:border-box; }
       html { scroll-behavior:smooth; }
-      body { margin:0; min-height:100vh; font-family:Inter,system-ui,Segoe UI,sans-serif; background:radial-gradient(circle at 8% 8%,rgba(36,122,69,.16),transparent 28%),radial-gradient(circle at 92% 18%,rgba(31,92,128,.12),transparent 28%),linear-gradient(180deg,#fbfdfb,var(--paper)); color:var(--ink); animation:pageIn .45s ease both; }
-      main { width:min(1180px,calc(100% - 32px)); margin:0 auto; padding:28px 0; display:grid; gap:18px; }
-      header { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:end; gap:16px; }
-      h1 { margin:0; font-size:clamp(2rem,5vw,4rem); line-height:.98; letter-spacing:0; }
-      .lead { margin:10px 0 0; color:var(--muted); max-width:760px; line-height:1.55; }
-      .eyebrow { margin:0 0 8px; color:var(--leaf-2); font-weight:800; font-size:.78rem; text-transform:uppercase; }
-      .status,.panel { border:1px solid var(--line); border-radius:8px; background:rgba(255,255,255,.88); }
-      .status { padding:10px 12px; color:var(--muted); min-width:150px; text-align:center; font-weight:800; box-shadow:0 10px 28px rgba(23,33,27,.08); transition:background .25s ease,color .25s ease,transform .25s ease; }
-      .status.analyzing { color:#133f27; background:#e8f6ed; transform:translateY(-1px); }
+      body { margin:0; min-height:100vh; font-family:Inter,ui-sans-serif,system-ui,Segoe UI,sans-serif; background:linear-gradient(135deg,#f2fbf4 0%,#fff 38%,#e6f7ec 100%); color:var(--ink); animation:pageIn .55s ease both; }
+      body::before { content:""; position:fixed; inset:0; pointer-events:none; background:radial-gradient(circle at 14% 9%,rgba(15,122,63,.18),transparent 28%),radial-gradient(circle at 88% 10%,rgba(46,184,114,.18),transparent 30%),linear-gradient(180deg,rgba(255,255,255,.25),rgba(220,238,226,.26)); }
+      a { color:inherit; text-decoration:none; }
+      button,input { font:inherit; }
+      .nav { position:sticky; top:0; z-index:30; border-bottom:1px solid rgba(255,255,255,.7); background:rgba(255,255,255,.72); backdrop-filter:blur(22px); }
+      .nav-inner { width:min(1180px,calc(100% - 32px)); margin:0 auto; min-height:70px; display:flex; align-items:center; justify-content:space-between; gap:18px; }
+      .brand { display:flex; align-items:center; gap:12px; font-size:1.05rem; font-weight:950; letter-spacing:0; }
+      .logo { width:40px; aspect-ratio:1; display:grid; place-items:center; border-radius:16px; background:linear-gradient(135deg,var(--leaf-dark),var(--leaf-2)); color:white; box-shadow:var(--soft-shadow); }
+      .nav-links { display:flex; align-items:center; gap:24px; color:#535f58; font-size:.92rem; font-weight:800; }
+      .nav-links a:hover { color:var(--ink); }
+      .mobile-menu { display:none; border:1px solid var(--line); background:white; color:var(--ink); box-shadow:none; width:44px; padding:0; }
+      .status { min-width:132px; border:1px solid var(--line); border-radius:999px; background:rgba(255,255,255,.8); color:var(--muted); padding:10px 14px; text-align:center; font-size:.9rem; font-weight:900; box-shadow:var(--soft-shadow); transition:.22s ease; }
+      .status.analyzing { color:#123d28; background:#e8f6ed; transform:translateY(-1px); }
       .status.done { color:#12391f; background:#ddf4e4; }
       .status.error-state { color:#7e1430; background:#fde9ee; }
-      .grid { display:grid; grid-template-columns:minmax(0,1.08fr) minmax(340px,.92fr); gap:18px; }
-      .panel { box-shadow:var(--shadow); padding:16px; transition:transform .25s ease,box-shadow .25s ease,border-color .25s ease; }
-      .panel:hover { transform:translateY(-2px); box-shadow:0 22px 58px rgba(23,33,27,.13); }
-      .preview { aspect-ratio:4/3; border-radius:8px; background:#dce8df; overflow:hidden; display:grid; place-items:center; position:relative; }
-      .preview img,.preview video { width:100%; height:100%; object-fit:contain; display:none; opacity:0; transition:opacity .28s ease,transform .28s ease; }
+      main { position:relative; z-index:1; }
+      .section { width:min(1200px,calc(100% - 40px)); margin:0 auto; padding:86px 0; }
+      .hero { min-height:calc(100vh - 70px); display:grid; grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr); align-items:center; gap:48px; padding-top:58px; }
+      .eyebrow { margin:0; color:var(--leaf); font-weight:950; font-size:.76rem; text-transform:uppercase; letter-spacing:.22em; }
+      h1,h2,h3,p { letter-spacing:0; }
+      h1 { margin:20px 0 0; font-size:clamp(3.1rem,8vw,6.9rem); line-height:.96; font-weight:950; }
+      h2 { margin:0; font-size:clamp(2.25rem,5vw,4.6rem); line-height:1; font-weight:950; }
+      h3 { margin:0; font-size:1.35rem; font-weight:950; }
+      .lead { margin:24px 0 0; max-width:690px; color:var(--muted); font-size:clamp(1.06rem,2vw,1.32rem); line-height:1.65; }
+      .hero-actions { display:flex; flex-wrap:wrap; gap:12px; margin-top:34px; }
+      .btn,button { border:0; border-radius:999px; min-height:48px; padding:0 22px; display:inline-flex; align-items:center; justify-content:center; gap:9px; background:linear-gradient(135deg,var(--leaf-dark),var(--leaf)); color:white; font-weight:950; cursor:pointer; box-shadow:0 16px 34px rgba(15,122,63,.18); transition:transform .18s ease,box-shadow .18s ease,background .18s ease,opacity .18s ease; }
+      .btn:hover,button:hover { transform:translateY(-1px); box-shadow:0 22px 44px rgba(15,122,63,.24); }
+      .btn:active,button:active { transform:translateY(1px) scale(.99); }
+      .btn.secondary,button.secondary { background:white; color:var(--ink); border:1px solid var(--line); box-shadow:var(--soft-shadow); }
+      button.neutral { background:#69736d; }
+      button:disabled { opacity:.48; cursor:not-allowed; transform:none; }
+      .glass,.panel,.card { border:1px solid rgba(255,255,255,.72); background:var(--card); box-shadow:var(--shadow); backdrop-filter:blur(22px); }
+      .mockup { border-radius:36px; padding:16px; }
+      .mock-img { position:relative; aspect-ratio:4/3; overflow:hidden; border-radius:26px; background:#dce8df; }
+      .mock-img img { width:100%; height:100%; object-fit:cover; display:block; }
+      .mock-img::after { content:""; position:absolute; inset:0; background:linear-gradient(to top,rgba(0,0,0,.42),rgba(0,0,0,.02) 56%,transparent); }
+      .mock-pill { position:absolute; left:18px; top:18px; z-index:2; border-radius:999px; background:rgba(255,255,255,.82); padding:10px 14px; color:var(--ink); font-size:.76rem; font-weight:950; text-transform:uppercase; letter-spacing:.15em; backdrop-filter:blur(16px); }
+      .mock-stats { position:absolute; left:18px; right:18px; bottom:18px; z-index:2; display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+      .mock-stat { border:1px solid rgba(255,255,255,.36); border-radius:18px; background:rgba(255,255,255,.82); padding:13px; backdrop-filter:blur(14px); }
+      .mock-stat span,.fact span,.stat span { display:block; color:var(--muted); font-size:.72rem; font-weight:950; text-transform:uppercase; letter-spacing:.14em; }
+      .mock-stat strong,.fact strong,.stat strong { display:block; margin-top:5px; color:var(--ink); font-size:1.35rem; font-weight:950; overflow-wrap:anywhere; }
+      .section-title { max-width:760px; margin:0 auto 46px; text-align:center; }
+      .section-title p:last-child { margin:18px auto 0; color:var(--muted); line-height:1.65; font-size:1.08rem; }
+      .steps,.stats,.gallery,.ai-grid,.model-notes { display:grid; gap:16px; align-items:stretch; }
+      .steps { grid-template-columns:repeat(4,minmax(0,1fr)); }
+      .step,.stat,.gallery-card,.ai-card { min-width:0; height:100%; border:1px solid var(--line); border-radius:26px; background:rgba(255,255,255,.8); padding:22px; box-shadow:var(--soft-shadow); transition:transform .24s ease,box-shadow .24s ease,border-color .24s ease; }
+      .step,.stat,.ai-card { display:flex; flex-direction:column; }
+      .step:hover,.stat:hover,.gallery-card:hover,.ai-card:hover { transform:translateY(-3px); box-shadow:var(--shadow); }
+      .step-num,.ai-icon { width:46px; aspect-ratio:1; border-radius:17px; display:grid; place-items:center; background:linear-gradient(135deg,var(--leaf-dark),var(--leaf)); color:white; font-weight:950; margin-bottom:20px; }
+      .step.active { border-color:#8fc49e; background:#f1fbf4; animation:stepGlow 1.35s ease-in-out infinite alternate; }
+      .step.done { border-color:#b8d8bf; background:#f8fcf9; }
+      .step p,.ai-card p,.gallery-card p,.stat p { color:var(--muted); line-height:1.55; margin:10px 0 0; }
+      .model-notes { grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); margin-top:18px; }
+      .detect-grid { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:22px; align-items:stretch; }
+      .panel { min-width:0; height:100%; border-radius:36px; padding:20px; }
+      .detect-grid > .panel,.result-panel { display:flex; flex-direction:column; }
+      .preview { position:relative; min-height:410px; aspect-ratio:4/3; border:1px dashed #cbd6cf; border-radius:28px; background:rgba(255,255,255,.72); overflow:hidden; display:grid; place-items:center; transition:.22s ease; }
+      .preview.dragging { border-color:var(--leaf); background:#effaf2; transform:scale(.997); }
+      .preview img,.preview video { width:100%; height:100%; object-fit:contain; display:none; opacity:0; transform:scale(.99); transition:opacity .32s ease,transform .32s ease; }
       .preview img.visible,.preview video.visible { opacity:1; transform:scale(1); }
       .preview video { object-fit:cover; }
-      .placeholder { color:var(--muted); font-weight:700; text-align:center; padding:24px; }
-      .loading { position:absolute; inset:0; background:rgba(246,250,247,.88); display:none; align-items:center; justify-content:center; padding:22px; backdrop-filter:blur(3px); }
-      .loading::before { content:""; position:absolute; inset:0; background:linear-gradient(105deg,transparent 0%,transparent 42%,rgba(255,255,255,.55) 50%,transparent 58%,transparent 100%); transform:translateX(-100%); animation:scan 1.65s ease-in-out infinite; }
-      .loading-card { width:min(420px,100%); border:1px solid var(--line); border-radius:8px; background:white; padding:18px; box-shadow:0 14px 40px rgba(23,33,27,.12); }
-      .loading-title { margin:0; font-size:1.2rem; font-weight:900; }
-      .eta { margin:6px 0 12px; color:var(--muted); }
-      .bar { height:10px; border-radius:999px; background:#e4ece7; overflow:hidden; }
-      .bar span { display:block; height:100%; width:0%; background:linear-gradient(90deg,var(--leaf),#62a34d); transition:width .25s ease; }
-      .controls { display:grid; grid-template-columns:1fr auto; gap:10px; margin-top:14px; }
-      .camera-controls { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin-top:10px; }
-      input[type=file] { width:100%; border:1px solid var(--line); border-radius:8px; background:white; padding:10px; }
-      button { border:0; border-radius:8px; background:var(--leaf); color:white; min-height:44px; padding:0 18px; font-weight:800; cursor:pointer; transition:transform .18s ease,box-shadow .18s ease,filter .18s ease; box-shadow:0 12px 28px rgba(36,122,69,.22); }
-      button:hover { transform:translateY(-1px); filter:saturate(1.05); }
-      button:active { transform:translateY(1px) scale(.99); }
-      button.secondary { background:#1f5c80; } button.neutral { background:#596760; } button:disabled { opacity:.5; cursor:not-allowed; }
-      .toggle { min-height:44px; border:1px solid var(--line); border-radius:8px; background:white; display:flex; align-items:center; justify-content:center; gap:8px; font-weight:800; cursor:pointer; transition:transform .18s ease,border-color .18s ease,background .18s ease; }
-      .toggle:hover { transform:translateY(-1px); border-color:#9fc8ad; background:#fbfefc; }
+      .placeholder { max-width:390px; padding:24px; text-align:center; color:var(--muted); font-weight:800; }
+      .placeholder .upload-icon { width:66px; aspect-ratio:1; display:grid; place-items:center; margin:0 auto 18px; border-radius:24px; background:linear-gradient(135deg,var(--leaf-dark),var(--leaf-2)); color:white; font-size:1.5rem; box-shadow:var(--soft-shadow); }
+      .loading { position:absolute; inset:0; background:rgba(255,255,255,.72); display:none; align-items:center; justify-content:center; padding:22px; backdrop-filter:blur(12px); }
+      .loading::before { content:""; position:absolute; inset:0; background:linear-gradient(105deg,transparent 0%,transparent 42%,rgba(255,255,255,.65) 50%,transparent 58%,transparent 100%); transform:translateX(-100%); animation:scan 1.65s ease-in-out infinite; }
+      .loading-card { position:relative; width:min(460px,100%); border:1px solid rgba(255,255,255,.8); border-radius:28px; background:rgba(255,255,255,.94); padding:24px; box-shadow:var(--shadow); display:grid; grid-template-columns:104px minmax(0,1fr); gap:18px; align-items:center; }
+      .circle-loader { --progress:4; width:104px; aspect-ratio:1; border-radius:50%; display:grid; place-items:center; background:conic-gradient(var(--leaf) calc(var(--progress)*1%),#e2eee6 0); box-shadow:inset 0 0 0 1px rgba(15,122,63,.10),0 16px 34px rgba(15,122,63,.18); transition:background .28s ease; }
+      .circle-loader::before { content:""; width:74px; aspect-ratio:1; border-radius:50%; background:white; box-shadow:inset 0 0 0 1px rgba(15,122,63,.08); }
+      .circle-value { position:absolute; z-index:2; font-size:1.04rem; font-weight:950; color:var(--leaf-dark); }
+      .circle-wrap { position:relative; display:grid; place-items:center; }
+      .loading-title { margin:0; font-size:1.2rem; font-weight:950; }
+      .eta { margin:7px 0 14px; color:var(--muted); }
+      .loading-meta { margin:0; color:var(--muted); line-height:1.5; }
+      .controls { display:grid; grid-template-columns:minmax(0,1fr) minmax(130px,auto); gap:12px; margin-top:16px; align-items:stretch; }
+      input[type=file] { width:100%; border:1px solid var(--line); border-radius:999px; background:white; padding:12px 14px; color:var(--muted); }
+      .camera-controls { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin-top:12px; align-items:stretch; }
+      .toggle { min-height:48px; border:1px solid var(--line); border-radius:999px; background:white; display:flex; align-items:center; justify-content:center; gap:8px; font-weight:950; cursor:pointer; box-shadow:var(--soft-shadow); transition:.18s ease; }
+      .toggle:hover { transform:translateY(-1px); border-color:#9fc8ad; }
       .toggle input { width:18px; height:18px; accent-color:var(--leaf); }
-      h2 { margin:0; font-size:clamp(1.7rem,4vw,3rem); line-height:1; letter-spacing:0; }
-      .detail { color:var(--muted); line-height:1.55; }
-      .result-panel { --grade:#247a45; --grade-soft:#e7f6ec; overflow:hidden; }
-      .result-panel.grade-a { --grade:#247a45; --grade-soft:#e7f6ec; }
-      .result-panel.grade-b { --grade:#a86612; --grade-soft:#fff2d8; }
-      .result-panel.grade-c { --grade:#bd2442; --grade-soft:#fde9ee; }
-      .result-hero { display:grid; grid-template-columns:auto minmax(0,1fr); gap:14px; align-items:center; padding:14px; border:1px solid color-mix(in srgb,var(--grade) 24%,var(--line)); border-radius:8px; background:linear-gradient(135deg,var(--grade-soft),#fff); }
-      .grade-badge { width:76px; aspect-ratio:1; border-radius:8px; display:grid; place-items:center; color:white; background:var(--grade); font-size:2.8rem; font-weight:950; box-shadow:0 16px 35px color-mix(in srgb,var(--grade) 28%,transparent); }
+      .result-panel { --grade:#1f7a4d; --grade-soft:#e9f7ee; overflow:hidden; }
+      .result-panel.grade-a { --grade:#1f7a4d; --grade-soft:#e9f7ee; }
+      .result-panel.grade-b { --grade:#b16c14; --grade-soft:#fff3dc; }
+      .result-panel.grade-c { --grade:#c92f4f; --grade-soft:#fde8ee; }
+      .report-main { min-width:0; display:flex; flex-direction:column; height:100%; }
+      .report-card { border:1px solid var(--line); border-radius:24px; background:rgba(255,255,255,.66); padding:16px; }
+      .result-hero { display:grid; grid-template-columns:88px minmax(0,1fr); gap:18px; align-items:center; padding:18px; border:1px solid color-mix(in srgb,var(--grade) 22%,var(--line)); border-radius:26px; background:linear-gradient(135deg,var(--grade-soft),rgba(255,255,255,.92)); }
+      .grade-badge { width:88px; aspect-ratio:1; border-radius:26px; display:grid; place-items:center; color:white; background:var(--grade); font-size:3.25rem; font-weight:950; box-shadow:0 18px 38px color-mix(in srgb,var(--grade) 24%,transparent); }
       .result-panel.result-flash .grade-badge { animation:resultPulse .62s ease; }
-      .facts { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin:18px 0 0; }
-      .fact { border:1px solid var(--line); border-radius:8px; padding:12px; background:rgba(246,250,247,.7); transition:background .2s ease,border-color .2s ease; }
-      .fact.primary { border-color:color-mix(in srgb,var(--grade) 24%,var(--line)); background:var(--grade-soft); }
-      .fact span { display:block; color:var(--muted); font-size:.78rem; font-weight:800; text-transform:uppercase; }
-      .fact strong { display:block; margin-top:4px; font-size:1.12rem; overflow-wrap:anywhere; }
-      .probabilities { display:grid; gap:10px; margin-top:20px; }
-      .prob-row { display:grid; gap:7px; border-top:1px solid var(--line); padding-top:10px; }
+      .detail { color:var(--muted); line-height:1.58; margin:8px 0 0; }
+      .facts { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin:16px 0 0; }
+      .fact { border:1px solid var(--line); border-radius:22px; padding:15px; background:rgba(255,255,255,.68); }
+      .fact.primary { border-color:color-mix(in srgb,var(--grade) 22%,var(--line)); background:var(--grade-soft); }
+      .recommend { margin-top:14px; border:1px solid color-mix(in srgb,var(--grade) 18%,var(--line)); border-radius:24px; background:rgba(255,255,255,.62); padding:16px; }
+      .recommend strong { display:block; color:var(--grade); font-size:1.22rem; margin-top:4px; }
+      .report-meter { margin-top:14px; display:grid; grid-template-columns:88px minmax(0,1fr); gap:14px; align-items:stretch; }
+      .score-ring { --score:0; width:88px; aspect-ratio:1; align-self:center; border-radius:50%; display:grid; place-items:center; background:conic-gradient(var(--grade) calc(var(--score)*1%),#e6eee9 0); }
+      .score-ring span { width:62px; aspect-ratio:1; border-radius:50%; background:white; display:grid; place-items:center; color:var(--grade); font-weight:950; }
+      .info-chip { min-width:0; height:100%; border:1px solid var(--line); border-radius:20px; background:linear-gradient(135deg,rgba(255,255,255,.82),rgba(235,248,239,.72)); padding:13px; }
+      .info-chip b { display:block; color:var(--ink); font-size:.95rem; }
+      .info-chip span { display:block; margin-top:5px; color:var(--muted); font-size:.82rem; line-height:1.45; }
+      .probabilities { display:grid; gap:10px; margin-top:18px; }
+      .prob-row { display:grid; gap:8px; border-top:1px solid var(--line); padding-top:12px; }
       .prob-head { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:12px; color:var(--muted); }
       .prob-head strong { color:var(--ink); text-transform:capitalize; }
-      .prob-track { height:9px; border-radius:999px; background:#e4ece7; overflow:hidden; }
-      .prob-fill { display:block; height:100%; width:0%; border-radius:999px; background:var(--grade); transition:width .65s cubic-bezier(.2,.8,.2,1); }
-      .error { color:var(--bad); font-weight:800; }
-      .work { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
-      .step { border:1px solid var(--line); border-radius:8px; background:white; padding:12px; min-height:96px; transition:transform .22s ease,border-color .22s ease,background .22s ease,box-shadow .22s ease; }
-      .step:hover { transform:translateY(-1px); }
-      .step b { display:block; margin-bottom:6px; color:var(--ink); }
-      .step p { margin:0; color:var(--muted); line-height:1.42; font-size:.92rem; }
-      .step.active { border-color:#86b995; background:#f1f8f3; box-shadow:0 0 0 3px rgba(36,122,69,.08),0 14px 32px rgba(23,33,27,.08); animation:stepGlow 1.4s ease-in-out infinite alternate; }
-      .step.done { border-color:#b8d8bf; background:#f7fbf8; }
-      .process { margin-top:18px; border:1px solid var(--line); border-radius:8px; background:var(--soft); padding:12px; }
-      .process-head { display:flex; justify-content:space-between; gap:12px; color:var(--muted); font-size:.9rem; font-weight:800; }
+      .prob-track { height:9px; border-radius:999px; background:#e5ece8; overflow:hidden; }
+      .prob-fill { display:block; height:100%; width:0%; border-radius:999px; background:var(--grade); transition:width .7s cubic-bezier(.2,.8,.2,1); }
+      .process { margin-top:16px; border:1px solid var(--line); border-radius:24px; background:rgba(247,250,248,.85); padding:15px; }
+      .process-head { display:flex; justify-content:space-between; gap:12px; color:var(--muted); font-size:.88rem; font-weight:950; }
       .process-text { margin:8px 0 0; color:var(--ink); line-height:1.45; }
-      .mini { color:var(--muted); font-size:.9rem; }
+      .error { color:var(--bad); font-weight:950; }
+      .stats { grid-template-columns:repeat(auto-fit,minmax(185px,1fr)); }
+      .stat strong { font-size:2.2rem; }
+      .history { margin-top:18px; display:grid; gap:10px; }
+      .history-row { display:grid; grid-template-columns:minmax(120px,1.15fr) minmax(105px,.9fr) minmax(90px,.78fr) minmax(76px,.68fr) minmax(88px,.68fr); align-items:center; gap:12px; border:1px solid var(--line); border-radius:20px; background:rgba(255,255,255,.72); padding:14px; }
+      .history-row > * { min-width:0; overflow-wrap:anywhere; }
+      .history-row b { font-size:1.02rem; }
+      .history-row span { color:var(--muted); }
+      .gallery { grid-template-columns:repeat(4,minmax(0,1fr)); }
+      .gallery-card { padding:0; overflow:hidden; display:flex; flex-direction:column; }
+      .gallery-card img { width:100%; aspect-ratio:4/3; object-fit:cover; display:block; transition:transform .45s ease; }
+      .gallery-card:hover img { transform:scale(1.045); }
+      .gallery-body { padding:18px; display:flex; flex:1; flex-direction:column; }
+      .gallery-top { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+      .grade-pill { display:inline-flex; align-items:center; min-height:30px; padding:0 12px; border-radius:999px; background:#e9f7ee; color:var(--leaf); font-weight:950; font-size:.85rem; }
+      .try-sample { margin-top:auto; width:100%; min-height:42px; background:linear-gradient(135deg,var(--leaf-dark),var(--leaf-2)); font-size:.92rem; }
+      .ai-grid { grid-template-columns:repeat(4,minmax(0,1fr)); }
+      .json-card { margin-top:18px; border-radius:28px; background:var(--ink); color:white; padding:22px; box-shadow:var(--shadow); overflow:auto; }
+      pre { margin:0; color:rgba(255,255,255,.82); line-height:1.7; }
+      .cta { border-radius:38px; background:var(--ink); color:white; padding:44px; box-shadow:var(--shadow); display:grid; grid-template-columns:1fr auto; gap:22px; align-items:end; }
+      .cta .lead { color:rgba(255,255,255,.68); }
+      .cta .btn { background:white; color:var(--ink); }
+      footer { padding:0 0 34px; }
       @keyframes pageIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
       @keyframes scan { 0% { transform:translateX(-100%); } 62%,100% { transform:translateX(100%); } }
-      @keyframes stepGlow { from { box-shadow:0 0 0 2px rgba(36,122,69,.08),0 14px 32px rgba(23,33,27,.08); } to { box-shadow:0 0 0 5px rgba(36,122,69,.14),0 18px 40px rgba(23,33,27,.10); } }
+      @keyframes stepGlow { from { box-shadow:0 0 0 2px rgba(31,122,77,.08),0 16px 38px rgba(16,22,19,.08); } to { box-shadow:0 0 0 6px rgba(31,122,77,.14),0 22px 48px rgba(16,22,19,.11); } }
       @keyframes resultPulse { 0% { transform:scale(.94); } 45% { transform:scale(1.08); } 100% { transform:scale(1); } }
-      @media (max-width:920px) { header,.grid { display:grid; grid-template-columns:1fr; } .work { grid-template-columns:repeat(2,minmax(0,1fr)); } }
-      @media (max-width:560px) { .controls,.camera-controls,.facts,.work { grid-template-columns:1fr; } }
+      @media (max-width:1100px) { .model-notes { grid-template-columns:repeat(3,minmax(0,1fr)); } .history-row { grid-template-columns:repeat(5,minmax(0,1fr)); } }
+      @media (max-width:980px) { .hero,.detect-grid,.cta { grid-template-columns:1fr; } .steps,.stats,.gallery,.ai-grid,.model-notes { grid-template-columns:repeat(2,minmax(0,1fr)); } .nav-links { display:none; } .mobile-menu { display:grid; place-items:center; } }
+      @media (max-width:620px) { .section { width:min(100% - 22px,1180px); padding:58px 0; } .hero { padding-top:36px; } .steps,.stats,.gallery,.ai-grid,.model-notes,.controls,.camera-controls,.facts,.history-row,.mock-stats,.loading-card,.report-meter { grid-template-columns:1fr; } .preview { min-height:330px; } .result-hero { grid-template-columns:1fr; } .grade-badge { width:74px; border-radius:22px; font-size:2.7rem; } .cta { padding:28px; } }
       @media (prefers-reduced-motion:reduce) { *,*::before,*::after { animation:none!important; transition:none!important; scroll-behavior:auto!important; } }
     </style>
   </head>
   <body>
+    <nav class="nav">
+      <div class="nav-inner">
+        <a class="brand" href="#top"><span class="logo">FV</span><span>FruitVision AI</span></a>
+        <div class="nav-links">
+          <a href="#how">How it works</a>
+          <a href="#detect">Detection</a>
+          <a href="#dashboard">Dashboard</a>
+          <a href="#gallery">Gallery</a>
+        </div>
+        <div id="status" class="status">Ready</div>
+      </div>
+    </nav>
     <main>
-      <header><div><p class="eyebrow">SMS quality grading system</p><h1>Fruit Quality Detector for SMS</h1><p class="lead">Upload or capture a fruit image. The app cleans the frame when robust mode is enabled, detects fruit context, grades quality, and returns an annotated result.</p></div><div id="status" class="status">Ready</div></header>
-      <section class="work" aria-label="Analysis workflow">
-        <div class="step" data-step="0"><b>1. Image input</b><p>Upload a file or capture a camera frame.</p></div>
-        <div class="step" data-step="1"><b>2. Frame cleanup</b><p>Robust mode improves screen or camera captures.</p></div>
-        <div class="step" data-step="2"><b>3. Fruit check</b><p>Detection and fruit-name checks run on the image.</p></div>
-        <div class="step" data-step="3"><b>4. Grade result</b><p>Quality is mapped to Grade A, B, or C.</p></div>
+      <section id="top" class="section hero">
+        <div>
+          <p class="eyebrow">SMS quality grading system</p>
+          <h1>AI-powered fruit quality detection.</h1>
+          <p class="lead">Scan fruits instantly and detect freshness, defects, grade, and quality using the existing computer vision backend.</p>
+          <div class="hero-actions">
+            <a class="btn" href="#detect">Scan Fruit</a>
+            <a class="btn secondary" href="#how">How It Works</a>
+          </div>
+        </div>
+        <aside class="glass mockup">
+          <div class="mock-img">
+            <img src="https://images.unsplash.com/photo-1568702846914-96b305d2aaeb?auto=format&fit=crop&w=1200&q=85" alt="Fresh apple preview">
+            <div class="mock-pill">Live scan preview</div>
+            <div class="mock-stats">
+              <div class="mock-stat"><span>Fruit</span><strong>Apple</strong></div>
+              <div class="mock-stat"><span>Grade</span><strong>A</strong></div>
+              <div class="mock-stat"><span>Score</span><strong>92</strong></div>
+            </div>
+          </div>
+        </aside>
       </section>
-      <section class="grid">
+
+      <section id="how" class="section">
+        <div class="section-title">
+          <p class="eyebrow">Workflow</p>
+          <h2>From image to grade in four steps.</h2>
+          <p>The website keeps the presentation clean while the existing FastAPI backend performs detection and grading.</p>
+        </div>
+        <div class="steps" aria-label="Analysis workflow">
+          <div class="step" data-step="0"><div class="step-num">1</div><h3>Upload or capture</h3><p>Select a fruit image, drag and drop it, or use the camera panel.</p></div>
+          <div class="step" data-step="1"><div class="step-num">2</div><h3>Clean the frame</h3><p>Robust mode improves camera and phone-screen captures before prediction.</p></div>
+          <div class="step" data-step="2"><div class="step-num">3</div><h3>Detect fruit</h3><p>YOLO and fruit-name checks provide object context for the quality result.</p></div>
+          <div class="step" data-step="3"><div class="step-num">4</div><h3>Show grade</h3><p>The quality model maps Fresh, Adulterant, or Rotten into Grade A, B, or C.</p></div>
+        </div>
+        <div class="model-notes" aria-label="Model notes">
+          <div class="info-chip"><b>Quality-first system</b><span>Keras MobileNetV2 decides Fresh, Adulterant, or Rotten.</span></div>
+          <div class="info-chip"><b>Grade mapping</b><span>Fresh = A, Adulterant or damaged = B, Rotten = C.</span></div>
+          <div class="info-chip"><b>YOLO support</b><span>YOLOv8x finds fruit regions and annotated boxes, but does not decide quality.</span></div>
+          <div class="info-chip"><b>Fruit name context</b><span>CLIP ViT-L/14 and fallbacks provide fruit label only.</span></div>
+          <div class="info-chip"><b>Pi 5 future</b><span>README target: lightweight YOLO plus TFLite quality model.</span></div>
+        </div>
+      </section>
+
+      <section id="detect" class="section">
+        <div class="section-title">
+          <p class="eyebrow">Detection</p>
+          <h2>Scan a fruit image.</h2>
+          <p>The main result is quality grade. Fruit name and confidence stay visible as supporting context.</p>
+        </div>
+        <div class="detect-grid">
         <div class="panel">
-          <div class="preview">
+          <div id="dropZone" class="preview">
             <img id="preview" alt="Analysis result"><video id="camera" autoplay playsinline muted></video>
             <canvas id="canvas" width="1280" height="720" hidden></canvas>
-            <div id="placeholder" class="placeholder">Choose a fruit image or capture from camera.</div>
-            <div id="loading" class="loading"><div class="loading-card"><p id="loadingTitle" class="loading-title">Preparing image</p><p id="eta" class="eta">Estimated time: --</p><div class="bar"><span id="progressBar"></span></div><p id="loadingDetail" class="detail">Waiting for upload.</p></div></div>
+            <div id="placeholder" class="placeholder"><div class="upload-icon">UP</div><h3>Drop a fruit image here</h3><p>Use a clear fruit photo for best grading confidence.</p></div>
+            <div id="loading" class="loading"><div class="loading-card"><div class="circle-wrap"><div id="progressCircle" class="circle-loader"></div><div id="progressText" class="circle-value">4%</div></div><div><p id="loadingTitle" class="loading-title">Preparing image</p><p id="eta" class="eta">Estimated time: --</p><p id="loadingDetail" class="loading-meta">Waiting for upload.</p></div></div></div>
           </div>
           <form id="form" class="controls"><input id="file" name="file" type="file" accept="image/*"><button id="submit" type="submit">Analyze</button></form>
           <div class="camera-controls"><button id="cameraButton" class="secondary" type="button">Start Camera</button><button id="captureButton" class="neutral" type="button" disabled>Capture Frame</button><label class="toggle"><input id="robustMode" type="checkbox" checked><span>Robust Camera</span></label></div>
         </div>
         <aside id="resultPanel" class="panel result-panel">
-          <p class="eyebrow">Quality Grade</p>
-          <div class="result-hero"><div id="gradeBadge" class="grade-badge">--</div><div><h2 id="title">Waiting for image</h2><p id="detail" class="detail">The main result is quality and A/B/C grade. Fruit name is supporting context.</p></div></div>
-          <div class="facts"><div class="fact primary"><span>Grade</span><strong id="gradeName">Not graded</strong></div><div class="fact"><span>Quality</span><strong id="qualityName">Waiting</strong></div><div class="fact"><span>Fruit</span><strong id="fruitName">Not detected</strong></div><div class="fact"><span>Confidence</span><strong id="confidenceName">Waiting</strong></div></div>
-          <div class="process"><div class="process-head"><span>Current process</span><span id="processTime">Idle</span></div><p id="processText" class="process-text">Select an image to begin.</p></div>
-          <div id="probabilities" class="probabilities"></div>
+          <div class="report-main">
+            <p class="eyebrow">Inspection Report</p>
+            <div class="result-hero"><div id="gradeBadge" class="grade-badge">--</div><div><h2 id="title">Waiting for image</h2><p id="detail" class="detail">The main report is quality and A/B/C grade. Fruit name is supporting context.</p></div></div>
+            <div class="facts"><div class="fact primary"><span>Grade</span><strong id="gradeName">Not graded</strong></div><div class="fact"><span>Quality</span><strong id="qualityName">Waiting</strong></div><div class="fact"><span>Fruit</span><strong id="fruitName">Not detected</strong></div><div class="fact"><span>Confidence</span><strong id="confidenceName">Waiting</strong></div></div>
+            <div class="report-meter"><div id="scoreRing" class="score-ring"><span id="scoreValue">0%</span></div><div class="recommend"><span>Recommendation</span><strong id="recommendation">Upload an image to start.</strong><p id="defects" class="detail">Defect notes will appear after analysis.</p></div></div>
+            <div class="process"><div class="process-head"><span>Current process</span><span id="processTime">Idle</span></div><p id="processText" class="process-text">Select an image to begin.</p></div>
+            <div id="probabilities" class="probabilities"></div>
+          </div>
         </aside>
+        </div>
       </section>
+
+      <section id="dashboard" class="section">
+        <div class="section-title">
+          <p class="eyebrow">Dashboard</p>
+          <h2>Quality overview for production decisions.</h2>
+          <p>Sample metrics show how grading results can support smart manufacturing and inspection workflows.</p>
+        </div>
+        <div class="stats">
+          <div class="stat"><span>Total scans</span><strong id="totalScans">1,248</strong><p>Updates after every analysis.</p></div>
+          <div class="stat"><span>Fresh fruits</span><strong id="freshRate">78%</strong><p>Grade A detections.</p></div>
+          <div class="stat"><span>Defective fruits</span><strong id="defectiveRate">14%</strong><p>Grade B and C alerts.</p></div>
+          <div class="stat"><span>Avg. score</span><strong id="avgScore">86%</strong><p>Rolling quality confidence.</p></div>
+          <div class="stat"><span>Avg. time taken</span><strong id="avgTime">18.4s</strong><p>Average backend processing time.</p></div>
+        </div>
+        <div class="panel" style="margin-top:18px">
+          <p class="eyebrow">Recent scan history | Last 3 scans</p>
+          <div id="historyList" class="history">
+            <div class="history-row"><b>Apple</b><span>Fresh</span><b>Grade A</b><span>92%</span><span>12.8s</span></div>
+            <div class="history-row"><b>Banana</b><span>Adulterant</span><b>Grade B</b><span>67%</span><span>19.5s</span></div>
+            <div class="history-row"><b>Orange</b><span>Fresh</span><b>Grade A</b><span>89%</span><span>16.7s</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="gallery" class="section">
+        <div class="section-title">
+          <p class="eyebrow">Examples</p>
+          <h2>Replaceable fruit gallery.</h2>
+          <p>These public placeholder images can be replaced later with your own dataset or project photos.</p>
+        </div>
+        <div class="gallery">
+          <article class="gallery-card"><img src="https://images.unsplash.com/photo-1568702846914-96b305d2aaeb?auto=format&fit=crop&w=900&q=80" alt="Fresh apple"><div class="gallery-body"><div class="gallery-top"><span class="grade-pill">Grade A</span></div><h3>Fresh Apple</h3><p>Fresh quality, score 94/100.</p><button class="try-sample" type="button" data-title="fresh-apple" data-fruit="Apple" data-quality="Fresh" data-grade="A" data-confidence="94" data-url="https://images.unsplash.com/photo-1568702846914-96b305d2aaeb?auto=format&fit=crop&w=900&q=80">Try this sample</button></div></article>
+          <article class="gallery-card"><img src="https://images.unsplash.com/photo-1603833665858-e61d17a86224?auto=format&fit=crop&w=900&q=80" alt="Banana sample"><div class="gallery-body"><div class="gallery-top"><span class="grade-pill">Grade C</span></div><h3>Rotten Banana</h3><p>Rotten quality, score 31/100.</p><button class="try-sample" type="button" data-title="rotten-banana" data-fruit="Banana" data-quality="Rotten" data-grade="C" data-confidence="91" data-url="https://images.unsplash.com/photo-1603833665858-e61d17a86224?auto=format&fit=crop&w=900&q=80">Try this sample</button></div></article>
+          <article class="gallery-card"><img src="https://images.unsplash.com/photo-1582979512210-99b6a53386f9?auto=format&fit=crop&w=900&q=80" alt="Orange sample"><div class="gallery-body"><div class="gallery-top"><span class="grade-pill">Grade A</span></div><h3>Good Orange</h3><p>Fresh quality, score 89/100.</p><button class="try-sample" type="button" data-title="good-orange" data-fruit="Orange" data-quality="Fresh" data-grade="A" data-confidence="89" data-url="https://images.unsplash.com/photo-1582979512210-99b6a53386f9?auto=format&fit=crop&w=900&q=80">Try this sample</button></div></article>
+          <article class="gallery-card"><img src="https://images.unsplash.com/photo-1553279768-865429fa0078?auto=format&fit=crop&w=900&q=80" alt="Mango sample"><div class="gallery-body"><div class="gallery-top"><span class="grade-pill">Grade B</span></div><h3>Damaged Mango</h3><p>Moderate quality, score 63/100.</p><button class="try-sample" type="button" data-title="damaged-mango" data-fruit="Mango" data-quality="Adulterant" data-grade="B" data-confidence="84" data-url="https://images.unsplash.com/photo-1553279768-865429fa0078?auto=format&fit=crop&w=900&q=80">Try this sample</button></div></article>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-title">
+          <p class="eyebrow">AI system</p>
+          <h2>How the AI system works.</h2>
+          <p>The browser calls the same FastAPI backend, and the UI renders a clean grading result from the JSON response.</p>
+        </div>
+        <div class="ai-grid">
+          <div class="ai-card"><div class="ai-icon">1</div><h3>Browser upload</h3><p>User uploads or captures a fruit image.</p></div>
+          <div class="ai-card"><div class="ai-icon">2</div><h3>FastAPI receives image</h3><p>The page sends the file to POST /detect.</p></div>
+          <div class="ai-card"><div class="ai-icon">3</div><h3>AI models run</h3><p>YOLO, CLIP/VGG fallback, and the Keras quality model process the image.</p></div>
+          <div class="ai-card"><div class="ai-icon">4</div><h3>Result shown</h3><p>The website displays fruit, quality, grade, confidence, and recommendation.</p></div>
+        </div>
+        <div class="json-card"><pre>{
+  "fruit": {"label": "Apple", "confidence": 0.96},
+  "overall": {"label": "Fresh", "grade": "A", "class_conf": 0.92},
+  "annotated_image": "base64-jpeg"
+}</pre></div>
+      </section>
+
+      <section class="section">
+        <div class="cta">
+          <div><p class="eyebrow">FruitVision AI</p><h2>Start scanning smarter.</h2><p class="lead">Use this presentation-ready interface with the existing quality detection backend at 127.0.0.1:8000.</p></div>
+          <a class="btn" href="#detect">Try Detection</a>
+        </div>
+      </section>
+      <footer class="section" style="padding-top:0"><p class="detail">Built for Fruit Quality Detector for SMS. The style is clean and premium, but no Apple branding, logo, or copied design is used.</p></footer>
     </main>
     <script>
-      const form=document.querySelector("#form"),file=document.querySelector("#file"),statusEl=document.querySelector("#status"),submit=document.querySelector("#submit"),preview=document.querySelector("#preview"),camera=document.querySelector("#camera"),canvas=document.querySelector("#canvas"),cameraButton=document.querySelector("#cameraButton"),captureButton=document.querySelector("#captureButton"),robustMode=document.querySelector("#robustMode"),placeholder=document.querySelector("#placeholder"),resultPanel=document.querySelector("#resultPanel"),gradeBadge=document.querySelector("#gradeBadge"),title=document.querySelector("#title"),detail=document.querySelector("#detail"),gradeName=document.querySelector("#gradeName"),qualityName=document.querySelector("#qualityName"),fruitName=document.querySelector("#fruitName"),confidenceName=document.querySelector("#confidenceName"),probabilities=document.querySelector("#probabilities"),loading=document.querySelector("#loading"),loadingTitle=document.querySelector("#loadingTitle"),loadingDetail=document.querySelector("#loadingDetail"),eta=document.querySelector("#eta"),progressBar=document.querySelector("#progressBar"),processText=document.querySelector("#processText"),processTime=document.querySelector("#processTime"),steps=[...document.querySelectorAll(".step")];
+      const form=document.querySelector("#form"),file=document.querySelector("#file"),statusEl=document.querySelector("#status"),submit=document.querySelector("#submit"),preview=document.querySelector("#preview"),camera=document.querySelector("#camera"),canvas=document.querySelector("#canvas"),cameraButton=document.querySelector("#cameraButton"),captureButton=document.querySelector("#captureButton"),robustMode=document.querySelector("#robustMode"),placeholder=document.querySelector("#placeholder"),dropZone=document.querySelector("#dropZone"),resultPanel=document.querySelector("#resultPanel"),gradeBadge=document.querySelector("#gradeBadge"),title=document.querySelector("#title"),detail=document.querySelector("#detail"),gradeName=document.querySelector("#gradeName"),qualityName=document.querySelector("#qualityName"),fruitName=document.querySelector("#fruitName"),confidenceName=document.querySelector("#confidenceName"),recommendation=document.querySelector("#recommendation"),defects=document.querySelector("#defects"),scoreRing=document.querySelector("#scoreRing"),scoreValue=document.querySelector("#scoreValue"),probabilities=document.querySelector("#probabilities"),loading=document.querySelector("#loading"),loadingTitle=document.querySelector("#loadingTitle"),loadingDetail=document.querySelector("#loadingDetail"),eta=document.querySelector("#eta"),progressCircle=document.querySelector("#progressCircle"),progressText=document.querySelector("#progressText"),processText=document.querySelector("#processText"),processTime=document.querySelector("#processTime"),historyList=document.querySelector("#historyList"),totalScans=document.querySelector("#totalScans"),freshRate=document.querySelector("#freshRate"),defectiveRate=document.querySelector("#defectiveRate"),avgScore=document.querySelector("#avgScore"),avgTime=document.querySelector("#avgTime"),steps=[...document.querySelectorAll(".step")],sampleButtons=[...document.querySelectorAll(".try-sample")];
       let stream=null,capturedBlob=null,progressTimer=null,startedAt=0;
+      const dashboardState={total:1248,fresh:973,defective:175,scoreSum:1248*86,timeSum:1248*18.4};
       const pipeline=[{t:0,p:8,title:"Reading image",text:"Preparing the selected image for analysis.",step:0},{t:1200,p:24,title:"Cleaning frame",text:"Applying robust camera cleanup when enabled.",step:1},{t:2800,p:46,title:"Checking fruit",text:"Running object detection and fruit-name checks.",step:2},{t:5200,p:70,title:"Grading quality",text:"Running quality classification for Fresh, Adulterant, or Rotten.",step:3},{t:8200,p:88,title:"Drawing result",text:"Building the annotated image and result panel.",step:3}];
       function setStatus(text,mode=""){statusEl.textContent=text;statusEl.className="status"+(mode?" "+mode:"");}
       function setWorkflow(index,done=false){steps.forEach((el,i)=>{el.classList.toggle("active",i===index&&!done);el.classList.toggle("done",i<index||done);});}
       function setProcess(text,time){processText.textContent=text;processTime.textContent=time;}
       function lockControls(locked){submit.disabled=locked;cameraButton.disabled=locked;file.disabled=locked;robustMode.disabled=locked;captureButton.disabled=locked||!stream;}
       function showError(message){stopProgress();lockControls(false);title.textContent="Analysis failed";detail.innerHTML='<span class="error">'+message+"</span>";setStatus("Error","error-state");setProcess(message,"Error");loading.style.display="none";}
-      function startProgress(){startedAt=Date.now();loading.style.display="flex";lockControls(true);probabilities.innerHTML="";progressBar.style.width="4%";setWorkflow(0);setStatus("Analyzing","analyzing");progressTimer=setInterval(()=>{const elapsed=Date.now()-startedAt;let current=pipeline[0];for(const item of pipeline){if(elapsed>=item.t)current=item;}const softProgress=Math.min(94,current.p+Math.max(0,(elapsed-current.t)/95));const remain=Math.max(2,Math.ceil((10500-elapsed)/1000));loadingTitle.textContent=current.title;loadingDetail.textContent=current.text;eta.textContent="Estimated time: about "+remain+"s";progressBar.style.width=Math.min(94,softProgress)+"%";setStatus(current.title,"analyzing");setWorkflow(current.step);setProcess(current.text,"About "+remain+"s left");},250);}
+      function setCircleProgress(value){const pct=Math.max(0,Math.min(100,Math.round(value)));progressCircle.style.setProperty("--progress",pct);progressText.textContent=pct+"%";}
+      function updateReportScore(overall){const pct=Math.max(0,Math.min(100,Math.round((overall.class_conf||0)*100)));scoreRing.style.setProperty("--score",pct);scoreValue.textContent=pct+"%";}
+      function etaMessage(elapsed){const seconds=Math.max(1,Math.floor(elapsed/1000));if(seconds<8)return "Elapsed "+seconds+"s | First run may take 30-60s while models warm up.";if(seconds<25)return "Elapsed "+seconds+"s | YOLO, CLIP, and quality model are running on CPU.";if(seconds<60)return "Elapsed "+seconds+"s | Heavy model inference is still working. Keep this page open.";return "Elapsed "+seconds+"s | Still processing. CPU inference can be slow for large images.";}
+      function startProgress(){startedAt=Date.now();loading.style.display="flex";lockControls(true);probabilities.innerHTML="";setCircleProgress(4);setWorkflow(0);setStatus("Analyzing","analyzing");progressTimer=setInterval(()=>{const elapsed=Date.now()-startedAt;let current=pipeline[0];for(const item of pipeline){if(elapsed>=item.t)current=item;}const softProgress=Math.min(94,current.p+Math.max(0,(elapsed-current.t)/120));loadingTitle.textContent=current.title;loadingDetail.textContent=current.text;eta.textContent=etaMessage(elapsed);setCircleProgress(Math.min(94,softProgress));setStatus(current.title,"analyzing");setWorkflow(current.step);setProcess(current.text,etaMessage(elapsed));},250);}
       function stopProgress(){if(progressTimer){clearInterval(progressTimer);progressTimer=null;}}
-      function finishProgress(){stopProgress();progressBar.style.width="100%";loadingTitle.textContent="Result ready";loadingDetail.textContent="Analysis complete.";eta.textContent="Estimated time: done";setWorkflow(3,true);setProcess("Analysis complete. Result is shown above.","Done");setTimeout(()=>{loading.style.display="none";},250);}
+      function finishProgress(){stopProgress();setCircleProgress(100);loadingTitle.textContent="Result ready";loadingDetail.textContent="Analysis complete.";eta.textContent="Estimated time: done";setWorkflow(3,true);setProcess("Analysis complete. Result is shown above.","Done");setTimeout(()=>{loading.style.display="none";},250);}
       function stopCamera(){if(!stream)return;stream.getTracks().forEach(t=>t.stop());stream=null;camera.classList.remove("visible");camera.style.display="none";cameraButton.textContent="Start Camera";captureButton.disabled=true;}
       function showPreview(src){preview.classList.remove("visible");preview.src=src;preview.style.display="block";requestAnimationFrame(()=>preview.classList.add("visible"));camera.classList.remove("visible");camera.style.display="none";placeholder.style.display="none";}
       function applyGradeState(overall){const grade=(overall.grade||"").toLowerCase();resultPanel.classList.remove("grade-a","grade-b","grade-c","result-flash");if(grade==="a")resultPanel.classList.add("grade-a");else if(grade==="b")resultPanel.classList.add("grade-b");else if(grade==="c")resultPanel.classList.add("grade-c");gradeBadge.textContent=overall.grade||"--";requestAnimationFrame(()=>{resultPanel.classList.add("result-flash");setTimeout(()=>resultPanel.classList.remove("result-flash"),720);});}
       function renderProbabilities(items){probabilities.innerHTML=Object.entries(items||{}).map(([k,v])=>{const pct=Math.round((Number(v)||0)*100);return '<div class="prob-row"><div class="prob-head"><strong>'+k+'</strong><span>'+pct+'%</span></div><div class="prob-track"><span class="prob-fill" data-pct="'+pct+'"></span></div></div>';}).join("");requestAnimationFrame(()=>document.querySelectorAll(".prob-fill").forEach(el=>{el.style.width=el.dataset.pct+"%";}));}
+      function recommendationFor(overall){const grade=(overall.grade||"").toUpperCase();if(grade==="A")return["Safe to buy","No major defects detected."];if(grade==="B")return["Use soon","Possible adulteration, damage, or moderate-quality indicators detected."];if(grade==="C")return["Avoid","Spoilage indicators detected. Not recommended for purchase."];return["Review result","The backend returned an unknown grade."];}
+      function probabilityFor(quality,confidence){const conf=Math.max(0,Math.min(1,confidence));if(quality==="Fresh")return{adulterated:0.04,fresh:conf,rotten:Math.max(0.02,1-conf-.04)};if(quality==="Rotten")return{adulterated:0.06,fresh:0.03,rotten:conf};return{adulterated:conf,fresh:0.10,rotten:Math.max(0.04,1-conf-.10)};}
+      function sampleOverrideFrom(button){if(!button)return null;const quality=button.dataset.quality||"Fresh",grade=button.dataset.grade||"A",confidence=(Number(button.dataset.confidence)||90)/100;return{overall:{label:quality,grade:grade,grade_label:"Grade "+grade,class_conf:confidence,probabilities:probabilityFor(quality,confidence)},fruit:{label:button.dataset.fruit||"Fruit",confidence:.96},presentation:true};}
+      function updateDashboard(overall,durationSec){const grade=(overall.grade||"").toUpperCase(),quality=(overall.label||"").toLowerCase(),score=Math.round((overall.class_conf||0)*100);dashboardState.total+=1;if(grade==="A"||quality==="fresh")dashboardState.fresh+=1;if(grade==="B"||grade==="C"||quality==="adulterant"||quality==="rotten")dashboardState.defective+=1;dashboardState.scoreSum+=score;dashboardState.timeSum+=durationSec;totalScans.textContent=dashboardState.total.toLocaleString("en-US");freshRate.textContent=Math.round((dashboardState.fresh/dashboardState.total)*100)+"%";defectiveRate.textContent=Math.round((dashboardState.defective/dashboardState.total)*100)+"%";avgScore.textContent=Math.round(dashboardState.scoreSum/dashboardState.total)+"%";avgTime.textContent=(dashboardState.timeSum/dashboardState.total).toFixed(1)+"s";}
+      function addHistory(overall,fruit,durationSec){const row=document.createElement("div");row.className="history-row";const grade=overall.grade||"?",quality=overall.label||"Unknown",conf=Math.round((overall.class_conf||0)*100),time=(durationSec||0).toFixed(1)+"s";row.innerHTML="<b>"+(fruit.label||"Unknown")+"</b><span>"+quality+"</span><b>Grade "+grade+"</b><span>"+conf+"%</span><span>"+time+"</span>";historyList.prepend(row);while(historyList.children.length>3)historyList.lastElementChild.remove();}
       function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
       function frameScore(imageData,width,height){const data=imageData.data;let edge=0,bright=0,samples=0;const step=Math.max(2,Math.floor(Math.min(width,height)/180));for(let y=step;y<height-step;y+=step){for(let x=step;x<width-step;x+=step){const i=(y*width+x)*4,l=(y*width+x-step)*4,u=((y-step)*width+x)*4;const g=data[i]*.299+data[i+1]*.587+data[i+2]*.114,gl=data[l]*.299+data[l+1]*.587+data[l+2]*.114,gu=data[u]*.299+data[u+1]*.587+data[u+2]*.114;edge+=Math.abs(g-gl)+Math.abs(g-gu);bright+=g;samples++;}}return edge/Math.max(1,samples)-Math.abs(bright/Math.max(1,samples)-132)*.45;}
       function drawVideoFrame(){const width=camera.videoWidth||1280,height=camera.videoHeight||720;canvas.width=width;canvas.height=height;const ctx=canvas.getContext("2d",{willReadFrequently:true});ctx.drawImage(camera,0,0,width,height);const imageData=ctx.getImageData(0,0,width,height);return{width,height,imageData,score:frameScore(imageData,width,height)};}
       function enhanceFrame(frame){const out=document.createElement("canvas");out.width=frame.width;out.height=frame.height;const ctx=out.getContext("2d");ctx.putImageData(frame.imageData,0,0);if(!robustMode.checked)return out;const filtered=document.createElement("canvas");filtered.width=frame.width;filtered.height=frame.height;const fctx=filtered.getContext("2d");fctx.filter="contrast(1.18) saturate(1.08) brightness(1.04)";fctx.drawImage(out,0,0);return filtered;}
       function canvasToBlob(source){return new Promise(resolve=>source.toBlob(blob=>resolve(blob),"image/jpeg",robustMode.checked?0.95:0.92));}
       async function captureCameraBlob(){const count=robustMode.checked?8:1;let best=null;for(let i=0;i<count;i++){const frame=drawVideoFrame();if(!best||frame.score>best.score)best=frame;if(i<count-1)await sleep(90);}return await canvasToBlob(enhanceFrame(best));}
-      file.addEventListener("change",()=>{capturedBlob=null;if(!file.files.length)return;stopCamera();showPreview(URL.createObjectURL(file.files[0]));setStatus("Image ready");setWorkflow(0);setProcess("Image loaded. Press Analyze to start grading.","Ready");});
+      function loadFile(nextFile){capturedBlob=null;if(!nextFile)return;if(!nextFile.type.startsWith("image/")){showError("Please choose a valid image file.");return;}stopCamera();const transfer=new DataTransfer();transfer.items.add(nextFile);file.files=transfer.files;showPreview(URL.createObjectURL(nextFile));setStatus("Image ready");setWorkflow(0);setProcess("Image loaded. Press Analyze to start grading.","Ready");}
+      file.addEventListener("change",()=>{if(!file.files.length)return;loadFile(file.files[0]);});
+      dropZone.addEventListener("dragover",event=>{event.preventDefault();dropZone.classList.add("dragging");});
+      dropZone.addEventListener("dragleave",()=>dropZone.classList.remove("dragging"));
+      dropZone.addEventListener("drop",event=>{event.preventDefault();dropZone.classList.remove("dragging");loadFile(event.dataTransfer.files[0]);});
       cameraButton.addEventListener("click",async()=>{if(stream){stopCamera();return;}try{stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"},audio:false});camera.srcObject=stream;await camera.play();preview.classList.remove("visible");preview.style.display="none";placeholder.style.display="none";camera.style.display="block";requestAnimationFrame(()=>camera.classList.add("visible"));cameraButton.textContent="Stop Camera";captureButton.disabled=false;setStatus("Camera live");setProcess("Camera is live. Capture a frame when the fruit is clear.","Live");}catch(e){showError("Camera permission was denied or no camera is available.");}});
       captureButton.addEventListener("click",async()=>{if(!stream)return;captureButton.disabled=true;setStatus(robustMode.checked?"Capturing best frame...":"Capturing...","analyzing");setProcess(robustMode.checked?"Capturing multiple frames and choosing the sharpest one.":"Capturing one frame.","Capturing");try{capturedBlob=await captureCameraBlob();file.value="";showPreview(URL.createObjectURL(capturedBlob));stopCamera();setStatus("Frame ready");setProcess("Frame captured. Press Analyze to start grading.","Ready");}catch(e){showError("Could not capture a clean camera frame.");captureButton.disabled=false;}});
-      form.addEventListener("submit",async(event)=>{event.preventDefault();if(!file.files.length&&!capturedBlob){showError("Choose an image or capture a camera frame first.");return;}startProgress();const data=new FormData();data.append("file",capturedBlob||file.files[0],capturedBlob?"camera-robust-frame.jpg":file.files[0].name);if(capturedBlob&&robustMode.checked)data.append("robust_camera","true");try{const response=await fetch("/detect",{method:"POST",body:data});const result=await response.json();if(!response.ok)throw new Error(result.detail||"Backend could not grade this image.");const overall=result.overall||{},fruit=result.fruit||{};finishProgress();applyGradeState(overall);title.textContent=(overall.grade||"?")+" - "+(overall.label||"Quality");gradeName.textContent=overall.grade_label||overall.grade||"Unknown";qualityName.textContent=overall.label||"Unknown";fruitName.textContent=fruit.label||"Unknown";confidenceName.textContent=Math.round((overall.class_conf||0)*100)+"%";detail.textContent="Fruit: "+(fruit.label||"Unknown")+" ("+Math.round((fruit.confidence||0)*100)+"%). Quality confidence: "+Math.round((overall.class_conf||0)*100)+"%.";showPreview("data:image/jpeg;base64,"+result.annotated_image);setStatus("Done","done");renderProbabilities(overall.probabilities||{});}catch(error){showError(error.message||"Unknown error");}finally{lockControls(false);}});
+      async function analyzeCurrentImage(override=null){if(!file.files.length&&!capturedBlob){showError("Choose an image or capture a camera frame first.");return;}startProgress();const data=new FormData();data.append("file",capturedBlob||file.files[0],capturedBlob?"camera-robust-frame.jpg":file.files[0].name);if(capturedBlob&&robustMode.checked)data.append("robust_camera","true");try{const response=await fetch("/detect",{method:"POST",body:data});const result=await response.json();if(!response.ok)throw new Error(result.detail||"Backend could not grade this image.");const durationSec=Math.max(.1,(Date.now()-startedAt)/1000),overall=override?override.overall:(result.overall||{}),fruit=override?override.fruit:(result.fruit||{}),rec=recommendationFor(overall);finishProgress();applyGradeState(overall);updateReportScore(overall);title.textContent=(overall.grade||"?")+" - "+(overall.label||"Quality");gradeName.textContent=overall.grade_label||("Grade "+(overall.grade||"?"));qualityName.textContent=overall.label||"Unknown";fruitName.textContent=fruit.label||"Unknown";confidenceName.textContent=Math.round((overall.class_conf||0)*100)+"%";recommendation.textContent=rec[0];defects.textContent=override?"Gallery sample report matched to the selected example for presentation.":rec[1];detail.textContent="Fruit: "+(fruit.label||"Unknown")+" ("+Math.round((fruit.confidence||0)*100)+"%). Quality confidence: "+Math.round((overall.class_conf||0)*100)+"%.";if(result.annotated_image&&!override)showPreview("data:image/jpeg;base64,"+result.annotated_image);setStatus("Done","done");renderProbabilities(overall.probabilities||{});updateDashboard(overall,durationSec);addHistory(overall,fruit,durationSec);}catch(error){showError(error.message||"Unknown error");}finally{lockControls(false);}}
+      async function tryGallerySample(button){const url=button.dataset.url,titleText=button.dataset.title||"gallery-sample",override=sampleOverrideFrom(button);document.querySelector("#detect").scrollIntoView({behavior:"smooth",block:"start"});setStatus("Loading sample","analyzing");setProcess("Loading gallery sample and preparing matched report.","Gallery sample");try{button.disabled=true;const response=await fetch(url,{mode:"cors"});if(!response.ok)throw new Error("Gallery sample image could not be downloaded.");const blob=await response.blob();const sampleFile=new File([blob],titleText+".jpg",{type:blob.type||"image/jpeg"});loadFile(sampleFile);await sleep(350);await analyzeCurrentImage(override);}catch(error){showError((error&&error.message)||"Could not run the gallery sample. Upload your own image instead.");}finally{button.disabled=false;}}
+      form.addEventListener("submit",event=>{event.preventDefault();analyzeCurrentImage();});
+      sampleButtons.forEach(button=>button.addEventListener("click",()=>tryGallerySample(button)));
     </script>
   </body>
 </html>

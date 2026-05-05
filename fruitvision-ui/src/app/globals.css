@@ -1,0 +1,85 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  background:
+    linear-gradient(135deg, rgba(245, 247, 245, 0.98), rgba(255, 255, 255, 0.98) 42%, rgba(231, 244, 236, 0.82)),
+    #f7f9f7;
+  color: #111714;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+::selection {
+  background: rgba(31, 122, 77, 0.16);
+}
+
+button,
+a,
+input {
+  -webkit-tap-highlight-color: transparent;
+}
+
+@layer components {
+  .glass-panel {
+    border: 1px solid rgba(255, 255, 255, 0.72);
+    background: rgba(255, 255, 255, 0.72);
+    box-shadow: 0 24px 70px rgba(17, 23, 20, 0.11);
+    backdrop-filter: blur(24px);
+  }
+
+  .soft-card {
+    border: 1px solid rgba(17, 23, 20, 0.08);
+    background: rgba(255, 255, 255, 0.82);
+    box-shadow: 0 14px 40px rgba(17, 23, 20, 0.08);
+  }
+
+  .premium-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.55rem;
+    border-radius: 999px;
+    padding: 0.9rem 1.25rem;
+    font-size: 0.95rem;
+    font-weight: 700;
+    transition: transform 180ms ease, box-shadow 180ms ease, background 180ms ease;
+  }
+
+  .premium-button:hover {
+    transform: translateY(-1px);
+  }
+
+  .premium-button:active {
+    transform: translateY(1px) scale(0.99);
+  }
+
+  .section-pad {
+    padding: 5.5rem 1.25rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

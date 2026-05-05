@@ -29,3 +29,9 @@ test*.json
 Thumbs.db
 .idea/
 .vscode/
+
+# Next.js frontend runtime/build artifacts
+fruitvision-ui/node_modules/
+fruitvision-ui/.next/
+fruitvision-ui/out/
+fruitvision-ui/.env*.local
