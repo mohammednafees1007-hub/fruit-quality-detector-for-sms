@@ -3,10 +3,14 @@ from __future__ import annotations
 import base64
 import json
 import os
+import subprocess
+import sys
+import tempfile
 from datetime import datetime
 from pathlib import Path
 
 import cv2
+import keras
 import numpy as np
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,15 +20,14 @@ from fastapi.responses import HTMLResponse
 BASE_DIR = Path(__file__).resolve().parent
 os.environ.setdefault("YOLO_CONFIG_DIR", str(BASE_DIR))
 
-RUNTIME_MODE = os.environ.get("RUNTIME_MODE", "minimal")
-QUALITY_TFLITE_PATH = Path(os.environ.get("QUALITY_TFLITE_MODEL", BASE_DIR / "models" / "fruit_quality_grader.tflite"))
-KERAS_QUALITY_MODEL_PATH = Path(os.environ.get("CLASSIFIER_MODEL", BASE_DIR / "models" / "fruit_quality_grader.keras"))
+CLASSIFIER_PATH = Path(os.environ.get("CLASSIFIER_MODEL", BASE_DIR / "models" / "fruit_quality_grader.keras"))
 QUALITY_CLASSES_PATH = Path(os.environ.get("QUALITY_CLASSES_FILE", BASE_DIR / "models" / "quality_classes.json"))
-DETECTOR_MODEL_PATH = Path(os.environ.get("YOLO_MODEL", BASE_DIR / "models" / "custom_fruit_detector.pt"))
-LIGHTWEIGHT_YOLO_FALLBACK = os.environ.get("YOLO_FALLBACK", "yolov8n.pt")
-YOLO_CONFIDENCE = float(os.environ.get("YOLO_CONFIDENCE", "0.18"))
-YOLO_IMAGE_SIZE = int(os.environ.get("YOLO_IMAGE_SIZE", "640"))
-MIN_QUALITY_CROP_AREA = float(os.environ.get("MIN_QUALITY_CROP_AREA", "0.08"))
+YOLO_MODEL_PATH = Path(os.environ.get("YOLO_MODEL", BASE_DIR / "yolov8x.pt"))
+CLIP_MODELS = os.environ.get("CLIP_MODELS", "ViT-L/14,ViT-B/32")
+CLIP_MIN_CONFIDENCE = float(os.environ.get("CLIP_MIN_CONFIDENCE", "0.04"))
+YOLO_CONFIDENCE = float(os.environ.get("YOLO_CONFIDENCE", "0.12"))
+YOLO_IMAGE_SIZE = int(os.environ.get("YOLO_IMAGE_SIZE", "960"))
+IMG_SIZE = 224
 
 QUALITY_CLASSES = ["adulterated", "fresh", "rotten"]
 QUALITY_DISPLAY = {
@@ -64,13 +67,29 @@ FRUIT_CLASSES = {
     "walnut", "watermelon", "zucchini",
 }
 
-_yolo = None
-_quality_interpreter = None
-_quality_input_details = None
-_quality_output_details = None
-_quality_classes = None
+IMAGENET_FRUIT_ALIASES = {
+    "banana": "banana",
+    "orange": "orange",
+    "lemon": "lemon",
+    "fig": "fig",
+    "pineapple": "pineapple",
+    "pomegranate": "pomegranate",
+    "strawberry": "strawberry",
+    "Granny_Smith": "apple",
+    "custard_apple": "custard apple",
+    "jackfruit": "jackfruit",
+    "bell_pepper": "pepper",
+    "cucumber": "cucumber",
+    "zucchini": "zucchini",
+}
 
-app = FastAPI(title="Fruit Quality Detector for SMS", version="3.0.0")
+_yolo = None
+_quality_model = None
+_quality_classes = None
+_vgg19_model = None
+_mobilenet_model = None
+
+app = FastAPI(title="Fruit Quality Detector for SMS", version="2.0.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -91,30 +110,20 @@ def get_yolo():
     if _yolo is None:
         from ultralytics import YOLO
 
-        model_ref = str(DETECTOR_MODEL_PATH if DETECTOR_MODEL_PATH.exists() else LIGHTWEIGHT_YOLO_FALLBACK)
+        model_ref = str(YOLO_MODEL_PATH if YOLO_MODEL_PATH.exists() else "yolov8x.pt")
         _yolo = YOLO(model_ref)
-        print(f"Lightweight YOLO loaded: {model_ref}")
+        print(f"YOLO loaded: {model_ref}")
     return _yolo
 
 
-def get_quality_interpreter():
-    global _quality_interpreter, _quality_input_details, _quality_output_details
-    if _quality_interpreter is None:
-        if not QUALITY_TFLITE_PATH.exists():
+def get_quality_model():
+    global _quality_model
+    if _quality_model is None:
+        if not CLASSIFIER_PATH.exists():
             return None
-        try:
-            from tflite_runtime.interpreter import Interpreter
-        except ImportError:
-            import tensorflow as tf
-
-            Interpreter = tf.lite.Interpreter
-
-        _quality_interpreter = Interpreter(model_path=str(QUALITY_TFLITE_PATH))
-        _quality_interpreter.allocate_tensors()
-        _quality_input_details = _quality_interpreter.get_input_details()
-        _quality_output_details = _quality_interpreter.get_output_details()
-        print(f"TFLite quality model loaded: {QUALITY_TFLITE_PATH}")
-    return _quality_interpreter
+        _quality_model = keras.models.load_model(CLASSIFIER_PATH, compile=False)
+        print(f"Quality model loaded: {CLASSIFIER_PATH}")
+    return _quality_model
 
 
 def get_quality_classes() -> list[str]:
@@ -127,50 +136,52 @@ def get_quality_classes() -> list[str]:
     return _quality_classes
 
 
-def quality_input_size() -> int:
-    interpreter = get_quality_interpreter()
-    if interpreter is None or not _quality_input_details:
-        return 160
-    shape = _quality_input_details[0]["shape"]
-    if len(shape) >= 3 and int(shape[1]) > 0:
+def get_vgg19_model():
+    global _vgg19_model
+    if _vgg19_model is None:
+        from keras.applications.vgg19 import VGG19
+
+        _vgg19_model = VGG19(weights="imagenet")
+        print("VGG19 ImageNet fallback loaded")
+    return _vgg19_model
+
+
+def get_mobilenet_model():
+    global _mobilenet_model
+    if _mobilenet_model is None:
+        from keras.applications.mobilenet_v2 import MobileNetV2
+
+        _mobilenet_model = MobileNetV2(weights="imagenet")
+        print("MobileNetV2 ImageNet fallback loaded")
+    return _mobilenet_model
+
+
+def quality_input_size(model) -> int:
+    shape = getattr(model, "input_shape", None)
+    if isinstance(shape, list):
+        shape = shape[0]
+    if shape and len(shape) >= 3 and shape[1] and shape[2]:
         return int(shape[1])
-    return 160
+    return IMG_SIZE
 
 
-def preprocess_quality_image(image_bgr: np.ndarray) -> np.ndarray:
-    if not _quality_input_details:
-        raise RuntimeError("Quality TFLite model input details are not available.")
-    input_detail = _quality_input_details[0]
-    image_size = quality_input_size()
+def preprocess_quality_image(image_bgr: np.ndarray, model=None) -> np.ndarray:
+    image_size = quality_input_size(model) if model is not None else IMG_SIZE
     image = cv2.resize(image_bgr, (image_size, image_size), interpolation=cv2.INTER_AREA)
     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB).astype(np.float32)
-    if input_detail["dtype"] != np.float32:
-        scale, zero_point = input_detail.get("quantization", (0.0, 0))
-        if scale:
-            image = image / float(scale) + float(zero_point)
-        image = np.clip(image, np.iinfo(input_detail["dtype"]).min, np.iinfo(input_detail["dtype"]).max)
-        image = image.astype(input_detail["dtype"])
     return image
 
 
 def classify_quality(image_bgr: np.ndarray) -> dict:
-    interpreter = get_quality_interpreter()
-    if interpreter is None:
+    model = get_quality_model()
+    if model is None:
         raise RuntimeError(
-            f"Quality TFLite grading model is missing. Expected model at {QUALITY_TFLITE_PATH}. "
-            "Run export_quality_tflite.py after training the Keras quality model."
+            f"Quality grading model is not trained yet. Expected model at {CLASSIFIER_PATH}. "
+            "Run prepare_quality_dataset.py and train_quality_backbone.py first."
         )
 
-    batch = np.expand_dims(preprocess_quality_image(image_bgr), axis=0)
-    input_detail = _quality_input_details[0]
-    output_detail = _quality_output_details[0]
-    interpreter.set_tensor(input_detail["index"], batch)
-    interpreter.invoke()
-    preds = interpreter.get_tensor(output_detail["index"])[0].astype(np.float32)
-    if output_detail["dtype"] != np.float32:
-        scale, zero_point = output_detail.get("quantization", (0.0, 0))
-        if scale:
-            preds = (preds - float(zero_point)) * float(scale)
+    batch = np.expand_dims(preprocess_quality_image(image_bgr, model), axis=0)
+    preds = model.predict(batch, verbose=0)[0]
     idx = int(np.argmax(preds))
     quality_classes = get_quality_classes()
     class_name = quality_classes[idx] if idx < len(quality_classes) else str(idx)
@@ -185,40 +196,97 @@ def classify_quality(image_bgr: np.ndarray) -> dict:
             quality_classes[i]: round(float(preds[i]), 4)
             for i in range(min(len(quality_classes), len(preds)))
         },
-        "source": "tflite_quality_model",
+        "source": "keras_quality_model",
     }
 
 
-def fruit_meta_from_detections(detections: list[dict]) -> dict:
-    candidates = [det for det in detections if not det.get("fallback")]
-    if candidates:
-        best = max(
-            candidates,
-            key=lambda det: (
-                max(0, det["bbox"][2] - det["bbox"][0])
-                * max(0, det["bbox"][3] - det["bbox"][1])
-                * max(0.05, float(det.get("yolo_conf", 0.0)))
-            ),
+def classify_clip_fruit(image_bgr: np.ndarray) -> dict | None:
+    temp_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False, dir=BASE_DIR) as tmp:
+            temp_path = Path(tmp.name)
+        cv2.imwrite(str(temp_path), image_bgr)
+        env = os.environ.copy()
+        env["YOLO_CONFIG_DIR"] = str(BASE_DIR)
+        env["CLIP_MODELS"] = CLIP_MODELS
+        result = subprocess.run(
+            [sys.executable, str(BASE_DIR / "clip_fruit_predict.py"), str(temp_path)],
+            cwd=str(BASE_DIR),
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=180,
+            check=False,
         )
-        return {
-            "fruit_name": best["yolo_class"],
-            "fruit_conf": round(float(best.get("yolo_conf", 0.0)), 4),
-            "fruit_source": "lightweight_yolo_detector",
-            "fruit_model": str(DETECTOR_MODEL_PATH if DETECTOR_MODEL_PATH.exists() else LIGHTWEIGHT_YOLO_FALLBACK),
-            "fruit_candidates": [
-                {
-                    "fruit_name": det["yolo_class"],
-                    "confidence": det["yolo_conf"],
-                    "bbox": det["bbox"],
-                }
-                for det in candidates[:5]
-            ],
-        }
+        if result.returncode != 0:
+            print(f"CLIP failed: {result.stderr.strip()}")
+            return None
+        meta = json.loads(result.stdout.strip().splitlines()[-1])
+        if float(meta.get("fruit_conf", 0.0)) < CLIP_MIN_CONFIDENCE:
+            return None
+        return meta
+    except Exception as exc:
+        print(f"CLIP failed: {exc}")
+        return None
+    finally:
+        if temp_path:
+            temp_path.unlink(missing_ok=True)
+
+
+def classify_imagenet_fruit(image_bgr: np.ndarray, source: str) -> dict | None:
+    try:
+        if source == "vgg19_imagenet":
+            from keras.applications.vgg19 import decode_predictions, preprocess_input
+
+            model = get_vgg19_model()
+        else:
+            from keras.applications.mobilenet_v2 import decode_predictions, preprocess_input
+
+            model = get_mobilenet_model()
+
+        image = cv2.resize(image_bgr, (224, 224), interpolation=cv2.INTER_AREA)
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB).astype(np.float32)
+        preds = model.predict(preprocess_input(np.expand_dims(image, axis=0)), verbose=0)
+        decoded = decode_predictions(preds, top=8)[0]
+    except Exception as exc:
+        print(f"{source} failed: {exc}")
+        return None
+
+    candidates = []
+    for _, imagenet_name, score in decoded:
+        clean = imagenet_name.replace(" ", "_")
+        fruit = IMAGENET_FRUIT_ALIASES.get(clean)
+        candidates.append({
+            "imagenet_name": imagenet_name,
+            "fruit_name": fruit or imagenet_name.replace("_", " "),
+            "confidence": round(float(score), 4),
+            "accepted": bool(fruit),
+        })
+        if fruit and float(score) >= 0.12:
+            return {
+                "fruit_name": fruit,
+                "fruit_conf": round(float(score), 4),
+                "fruit_source": source,
+                "fruit_model": source,
+                "fruit_candidates": candidates,
+            }
+    return None
+
+
+def classify_fruit_name(image_bgr: np.ndarray) -> dict:
+    for classifier in (
+        classify_clip_fruit,
+        lambda img: classify_imagenet_fruit(img, "vgg19_imagenet"),
+        lambda img: classify_imagenet_fruit(img, "mobilenet_imagenet"),
+    ):
+        meta = classifier(image_bgr)
+        if meta:
+            return meta
     return {
         "fruit_name": "unknown",
         "fruit_conf": 0.0,
-        "fruit_source": "detector_miss",
-        "fruit_model": str(DETECTOR_MODEL_PATH if DETECTOR_MODEL_PATH.exists() else LIGHTWEIGHT_YOLO_FALLBACK),
+        "fruit_source": "unavailable",
+        "fruit_model": None,
         "fruit_candidates": [],
     }
 
@@ -341,9 +409,6 @@ def select_quality_image(image_bgr: np.ndarray, detections: list[dict]) -> tuple
         ),
     )
     x1, y1, x2, y2 = best["bbox"]
-    box_area_ratio = (max(0, x2 - x1) * max(0, y2 - y1)) / float(max(1, h * w))
-    if box_area_ratio < MIN_QUALITY_CROP_AREA:
-        return image_bgr, None
     pad = int(max(x2 - x1, y2 - y1) * 0.08)
     x1 = max(0, x1 - pad)
     y1 = max(0, y1 - pad)
@@ -478,29 +543,24 @@ def root():
 
 @app.get("/health")
 def health():
+    clip_files = sorted(path.name for path in (BASE_DIR / "models" / "clip").glob("*") if path.is_file())
     quality_classes = get_quality_classes() if QUALITY_CLASSES_PATH.exists() else list(QUALITY_CLASSES)
-    detector_ref = str(DETECTOR_MODEL_PATH if DETECTOR_MODEL_PATH.exists() else LIGHTWEIGHT_YOLO_FALLBACK)
     return {
         "status": "healthy",
         "timestamp": datetime.utcnow().isoformat(),
         "base_dir": str(BASE_DIR),
-        "model_mode": "minimal_pi5_ready",
-        "runtime_mode": RUNTIME_MODE,
-        "runtime_model_count": 2,
-        "detector_model": detector_ref,
-        "detector_model_path": str(DETECTOR_MODEL_PATH),
-        "detector_custom_model_ready": DETECTOR_MODEL_PATH.exists(),
-        "detector_model_ready": DETECTOR_MODEL_PATH.exists() or LIGHTWEIGHT_YOLO_FALLBACK.endswith(".pt"),
-        "min_quality_crop_area": MIN_QUALITY_CROP_AREA,
-        "quality_model": str(QUALITY_TFLITE_PATH),
-        "quality_model_exists": QUALITY_TFLITE_PATH.exists(),
-        "quality_model_ready": QUALITY_TFLITE_PATH.exists() and QUALITY_CLASSES_PATH.exists(),
-        "quality_model_path": str(QUALITY_TFLITE_PATH),
-        "keras_training_model_path": str(KERAS_QUALITY_MODEL_PATH),
+        "yolo_model": str(YOLO_MODEL_PATH),
+        "yolo_model_exists": YOLO_MODEL_PATH.exists(),
+        "quality_model": str(CLASSIFIER_PATH),
+        "quality_model_exists": CLASSIFIER_PATH.exists(),
+        "quality_model_ready": CLASSIFIER_PATH.exists() and QUALITY_CLASSES_PATH.exists(),
+        "quality_model_path": str(CLASSIFIER_PATH),
         "quality_classes": quality_classes,
-        "grading_mode": "quality_first_minimal",
-        "fruit_name_source": "detector_class",
-        "removed_runtime_models": ["clip", "vgg19", "mobilenet_imagenet", "yolov8x"],
+        "grading_mode": "quality_first",
+        "clip_model_priority": [item.strip() for item in CLIP_MODELS.split(",") if item.strip()],
+        "clip_cached_files": clip_files,
+        "vgg19_fallback": True,
+        "mobilenet_fallback": True,
     }
 
 
@@ -519,13 +579,14 @@ async def detect(
     if image is None:
         raise HTTPException(status_code=400, detail="Could not decode image.")
 
+    raw_image = image.copy()
     input_h, input_w = image.shape[:2]
     robust_requested = bool(robust_camera) or (file.filename or "").lower().startswith("camera-robust")
     if robust_requested:
         image = robust_camera_preprocess(image)
 
     detections = yolo_detect(image)
-    fruit_meta = fruit_meta_from_detections(detections)
+    fruit_meta = classify_fruit_name(raw_image if robust_requested else image)
     quality_image, quality_detection = select_quality_image(image, detections)
     try:
         quality = classify_quality(quality_image)

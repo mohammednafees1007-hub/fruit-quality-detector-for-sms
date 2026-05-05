@@ -9,15 +9,12 @@ persistent_cache.json
 settings.json
 
 # Large downloaded/cached model artifacts
-yolo*.pt
-yolov8*.pt
+yolov8x.pt
 models/clip/
 models/*convnext*.keras
-models/custom_fruit_detector.pt
 
 # Keep the deployed small quality model and metadata in git.
 !models/fruit_quality_grader.keras
-!models/fruit_quality_grader.tflite
 !models/quality_classes.json
 !models/fruit_quality_grader.metrics.json
 
