@@ -1,0 +1,31 @@
+.venv/
+__pycache__/
+*.py[cod]
+
+# Local runtime files
+server.out.log
+server.err.log
+persistent_cache.json
+settings.json
+
+# Large downloaded/cached model artifacts
+yolov8x.pt
+models/clip/
+models/*convnext*.keras
+
+# Keep the deployed small quality model and metadata in git.
+!models/fruit_quality_grader.keras
+!models/quality_classes.json
+!models/fruit_quality_grader.metrics.json
+
+# Generated datasets and API response dumps
+data/quality_training/
+data/fruits360_yolo/
+detect_response.json
+test*.json
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
