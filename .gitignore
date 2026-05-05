@@ -23,6 +23,7 @@ models/custom_fruit_detector.pt
 
 # Generated datasets and API response dumps
 data/quality_training/
+data/fruit_type_training/
 data/fruits360_yolo/
 detect_response.json
 test*.json

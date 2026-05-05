@@ -14,17 +14,13 @@ from fastapi.responses import HTMLResponse
 
 
 BASE_DIR = Path(__file__).resolve().parent
-os.environ.setdefault("YOLO_CONFIG_DIR", str(BASE_DIR))
 
-RUNTIME_MODE = os.environ.get("RUNTIME_MODE", "minimal")
+RUNTIME_MODE = os.environ.get("RUNTIME_MODE", "hf_fruit_classifier")
 QUALITY_TFLITE_PATH = Path(os.environ.get("QUALITY_TFLITE_MODEL", BASE_DIR / "models" / "fruit_quality_grader.tflite"))
 KERAS_QUALITY_MODEL_PATH = Path(os.environ.get("CLASSIFIER_MODEL", BASE_DIR / "models" / "fruit_quality_grader.keras"))
 QUALITY_CLASSES_PATH = Path(os.environ.get("QUALITY_CLASSES_FILE", BASE_DIR / "models" / "quality_classes.json"))
-DETECTOR_MODEL_PATH = Path(os.environ.get("YOLO_MODEL", BASE_DIR / "models" / "custom_fruit_detector.pt"))
-LIGHTWEIGHT_YOLO_FALLBACK = os.environ.get("YOLO_FALLBACK", "yolov8n.pt")
-YOLO_CONFIDENCE = float(os.environ.get("YOLO_CONFIDENCE", "0.18"))
-YOLO_IMAGE_SIZE = int(os.environ.get("YOLO_IMAGE_SIZE", "640"))
-MIN_QUALITY_CROP_AREA = float(os.environ.get("MIN_QUALITY_CROP_AREA", "0.08"))
+FRUIT_TYPE_TFLITE_PATH = Path(os.environ.get("FRUIT_TYPE_TFLITE_MODEL", BASE_DIR / "models" / "fruit_type_classifier.tflite"))
+FRUIT_TYPE_CLASSES_PATH = Path(os.environ.get("FRUIT_TYPE_CLASSES_FILE", BASE_DIR / "models" / "fruit_type_classes.json"))
 
 QUALITY_CLASSES = ["adulterated", "fresh", "rotten"]
 QUALITY_DISPLAY = {
@@ -48,29 +44,16 @@ QUALITY_COLORS_BGR = {
     "adulterated": (11, 158, 245),
 }
 
-FRUIT_CLASSES = {
-    "almond", "apple", "apricot", "avocado", "banana", "bean pod", "beetroot",
-    "blackberry", "blueberry", "cabbage", "cactus fruit", "cantaloupe",
-    "carambola", "carrot", "cashew seed", "cauliflower", "cherry", "cherimoya",
-    "chestnut", "clementine", "coconut", "corn", "cucumber", "date",
-    "dragon fruit", "eggplant", "fig", "ginger root", "granadilla", "grape",
-    "grapefruit", "gooseberry", "guava", "hazelnut", "huckleberry", "kaki",
-    "kiwi", "kohlrabi", "kumquat", "lemon", "lime", "lychee", "mandarine",
-    "mango", "mangosteen", "melon", "mulberry", "nectarine", "nut", "onion",
-    "orange", "papaya", "passion fruit", "peach", "peanut", "pear", "pepino",
-    "pepper", "physalis", "pineapple", "pistachio", "plum", "pomegranate",
-    "pomelo", "potato", "quince", "rambutan", "raspberry", "red cabbage",
-    "redcurrant", "salak", "strawberry", "tamarillo", "tangelo", "tomato",
-    "walnut", "watermelon", "zucchini",
-}
-
-_yolo = None
+_fruit_interpreter = None
+_fruit_input_details = None
+_fruit_output_details = None
+_fruit_classes = None
 _quality_interpreter = None
 _quality_input_details = None
 _quality_output_details = None
 _quality_classes = None
 
-app = FastAPI(title="Fruit Quality Detector for SMS", version="3.0.0")
+app = FastAPI(title="Fruit Quality Detector for SMS", version="4.0.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -86,15 +69,38 @@ def display_name(name: str | None) -> str:
     return name.replace("_", " ").title()
 
 
-def get_yolo():
-    global _yolo
-    if _yolo is None:
-        from ultralytics import YOLO
+def load_tflite_interpreter(model_path: Path):
+    try:
+        from tflite_runtime.interpreter import Interpreter
+    except ImportError:
+        import tensorflow as tf
 
-        model_ref = str(DETECTOR_MODEL_PATH if DETECTOR_MODEL_PATH.exists() else LIGHTWEIGHT_YOLO_FALLBACK)
-        _yolo = YOLO(model_ref)
-        print(f"Lightweight YOLO loaded: {model_ref}")
-    return _yolo
+        Interpreter = tf.lite.Interpreter
+    interpreter = Interpreter(model_path=str(model_path))
+    interpreter.allocate_tensors()
+    return interpreter
+
+
+def get_fruit_interpreter():
+    global _fruit_interpreter, _fruit_input_details, _fruit_output_details
+    if _fruit_interpreter is None:
+        if not FRUIT_TYPE_TFLITE_PATH.exists():
+            return None
+        _fruit_interpreter = load_tflite_interpreter(FRUIT_TYPE_TFLITE_PATH)
+        _fruit_input_details = _fruit_interpreter.get_input_details()
+        _fruit_output_details = _fruit_interpreter.get_output_details()
+        print(f"TFLite fruit type model loaded: {FRUIT_TYPE_TFLITE_PATH}")
+    return _fruit_interpreter
+
+
+def get_fruit_classes() -> list[str]:
+    global _fruit_classes
+    if _fruit_classes is None:
+        if FRUIT_TYPE_CLASSES_PATH.exists():
+            _fruit_classes = json.loads(FRUIT_TYPE_CLASSES_PATH.read_text(encoding="utf-8"))
+        else:
+            _fruit_classes = []
+    return _fruit_classes
 
 
 def get_quality_interpreter():
@@ -102,15 +108,7 @@ def get_quality_interpreter():
     if _quality_interpreter is None:
         if not QUALITY_TFLITE_PATH.exists():
             return None
-        try:
-            from tflite_runtime.interpreter import Interpreter
-        except ImportError:
-            import tensorflow as tf
-
-            Interpreter = tf.lite.Interpreter
-
-        _quality_interpreter = Interpreter(model_path=str(QUALITY_TFLITE_PATH))
-        _quality_interpreter.allocate_tensors()
+        _quality_interpreter = load_tflite_interpreter(QUALITY_TFLITE_PATH)
         _quality_input_details = _quality_interpreter.get_input_details()
         _quality_output_details = _quality_interpreter.get_output_details()
         print(f"TFLite quality model loaded: {QUALITY_TFLITE_PATH}")
@@ -137,11 +135,16 @@ def quality_input_size() -> int:
     return 160
 
 
-def preprocess_quality_image(image_bgr: np.ndarray) -> np.ndarray:
-    if not _quality_input_details:
-        raise RuntimeError("Quality TFLite model input details are not available.")
-    input_detail = _quality_input_details[0]
-    image_size = quality_input_size()
+def tflite_input_size(input_details: list[dict], default: int) -> int:
+    if not input_details:
+        return default
+    shape = input_details[0]["shape"]
+    if len(shape) >= 3 and int(shape[1]) > 0:
+        return int(shape[1])
+    return default
+
+
+def preprocess_tflite_image(image_bgr: np.ndarray, input_detail: dict, image_size: int) -> np.ndarray:
     image = cv2.resize(image_bgr, (image_size, image_size), interpolation=cv2.INTER_AREA)
     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB).astype(np.float32)
     if input_detail["dtype"] != np.float32:
@@ -151,6 +154,64 @@ def preprocess_quality_image(image_bgr: np.ndarray) -> np.ndarray:
         image = np.clip(image, np.iinfo(input_detail["dtype"]).min, np.iinfo(input_detail["dtype"]).max)
         image = image.astype(input_detail["dtype"])
     return image
+
+
+def normalize_scores(preds: np.ndarray) -> np.ndarray:
+    preds = np.asarray(preds, dtype=np.float32)
+    total = float(np.sum(preds))
+    if np.any(preds < 0) or not (0.85 <= total <= 1.15):
+        exp = np.exp(preds - np.max(preds))
+        denom = float(np.sum(exp))
+        return exp / denom if denom else exp
+    return preds
+
+
+def preprocess_quality_image(image_bgr: np.ndarray) -> np.ndarray:
+    if not _quality_input_details:
+        raise RuntimeError("Quality TFLite model input details are not available.")
+    return preprocess_tflite_image(image_bgr, _quality_input_details[0], quality_input_size())
+
+
+def classify_fruit_type(image_bgr: np.ndarray) -> dict:
+    interpreter = get_fruit_interpreter()
+    if interpreter is None:
+        raise RuntimeError(
+            f"Fruit type TFLite model is missing. Expected model at {FRUIT_TYPE_TFLITE_PATH}. "
+            "Run train_fruit_type_classifier.py to create it."
+        )
+    fruit_classes = get_fruit_classes()
+    if not fruit_classes:
+        raise RuntimeError(f"Fruit class file is missing or empty. Expected classes at {FRUIT_TYPE_CLASSES_PATH}.")
+
+    input_detail = _fruit_input_details[0]
+    output_detail = _fruit_output_details[0]
+    image_size = tflite_input_size(_fruit_input_details, 128)
+    batch = np.expand_dims(preprocess_tflite_image(image_bgr, input_detail, image_size), axis=0)
+    interpreter.set_tensor(input_detail["index"], batch)
+    interpreter.invoke()
+    preds = interpreter.get_tensor(output_detail["index"])[0].astype(np.float32)
+    if output_detail["dtype"] != np.float32:
+        scale, zero_point = output_detail.get("quantization", (0.0, 0))
+        if scale:
+            preds = (preds - float(zero_point)) * float(scale)
+    preds = normalize_scores(preds)
+    idx = int(np.argmax(preds))
+    class_name = fruit_classes[idx] if idx < len(fruit_classes) else "unknown"
+    top_indices = np.argsort(preds)[::-1][:5]
+    return {
+        "fruit_name": class_name,
+        "fruit_conf": round(float(preds[idx]), 4),
+        "fruit_source": "fruit_type_tflite_model",
+        "fruit_model": str(FRUIT_TYPE_TFLITE_PATH),
+        "fruit_candidates": [
+            {
+                "fruit_name": fruit_classes[int(i)] if int(i) < len(fruit_classes) else str(int(i)),
+                "label": display_name(fruit_classes[int(i)] if int(i) < len(fruit_classes) else str(int(i))),
+                "confidence": round(float(preds[int(i)]), 4),
+            }
+            for i in top_indices
+        ],
+    }
 
 
 def classify_quality(image_bgr: np.ndarray) -> dict:
@@ -171,6 +232,7 @@ def classify_quality(image_bgr: np.ndarray) -> dict:
         scale, zero_point = output_detail.get("quantization", (0.0, 0))
         if scale:
             preds = (preds - float(zero_point)) * float(scale)
+    preds = normalize_scores(preds)
     idx = int(np.argmax(preds))
     quality_classes = get_quality_classes()
     class_name = quality_classes[idx] if idx < len(quality_classes) else str(idx)
@@ -186,40 +248,6 @@ def classify_quality(image_bgr: np.ndarray) -> dict:
             for i in range(min(len(quality_classes), len(preds)))
         },
         "source": "tflite_quality_model",
-    }
-
-
-def fruit_meta_from_detections(detections: list[dict]) -> dict:
-    candidates = [det for det in detections if not det.get("fallback")]
-    if candidates:
-        best = max(
-            candidates,
-            key=lambda det: (
-                max(0, det["bbox"][2] - det["bbox"][0])
-                * max(0, det["bbox"][3] - det["bbox"][1])
-                * max(0.05, float(det.get("yolo_conf", 0.0)))
-            ),
-        )
-        return {
-            "fruit_name": best["yolo_class"],
-            "fruit_conf": round(float(best.get("yolo_conf", 0.0)), 4),
-            "fruit_source": "lightweight_yolo_detector",
-            "fruit_model": str(DETECTOR_MODEL_PATH if DETECTOR_MODEL_PATH.exists() else LIGHTWEIGHT_YOLO_FALLBACK),
-            "fruit_candidates": [
-                {
-                    "fruit_name": det["yolo_class"],
-                    "confidence": det["yolo_conf"],
-                    "bbox": det["bbox"],
-                }
-                for det in candidates[:5]
-            ],
-        }
-    return {
-        "fruit_name": "unknown",
-        "fruit_conf": 0.0,
-        "fruit_source": "detector_miss",
-        "fruit_model": str(DETECTOR_MODEL_PATH if DETECTOR_MODEL_PATH.exists() else LIGHTWEIGHT_YOLO_FALLBACK),
-        "fruit_candidates": [],
     }
 
 
@@ -289,69 +317,6 @@ def robust_camera_preprocess(image: np.ndarray) -> np.ndarray:
         enhanced = cv2.convertScaleAbs(enhanced, alpha=0.92, beta=-8)
     blurred = cv2.GaussianBlur(enhanced, (0, 0), 1.2)
     return cv2.addWeighted(enhanced, 1.35, blurred, -0.35, 0)
-
-
-def yolo_detect(image_bgr: np.ndarray) -> list[dict]:
-    h, w = image_bgr.shape[:2]
-    yolo = get_yolo()
-    results = yolo(image_bgr, conf=YOLO_CONFIDENCE, imgsz=YOLO_IMAGE_SIZE, iou=0.45, max_det=20, verbose=False)
-    detections = []
-    for result in results:
-        for box in result.boxes:
-            coords = box.xyxy[0].cpu().numpy()
-            x1, y1, x2, y2 = map(int, coords)
-            class_id = int(box.cls[0])
-            class_name = yolo.names[class_id] if hasattr(yolo, "names") else str(class_id)
-            class_clean = class_name.replace("_", " ").lower()
-            if class_clean not in FRUIT_CLASSES:
-                continue
-            x1 = max(0, min(x1, w - 1))
-            y1 = max(0, min(y1, h - 1))
-            x2 = max(0, min(x2, w))
-            y2 = max(0, min(y2, h))
-            if x2 <= x1 or y2 <= y1:
-                continue
-            detections.append({
-                "bbox": [x1, y1, x2, y2],
-                "yolo_class": class_clean,
-                "yolo_conf": round(float(box.conf[0]), 4),
-                "fallback": False,
-            })
-    if not detections:
-        detections.append({
-            "bbox": [0, 0, w, h],
-            "yolo_class": "full_image",
-            "yolo_conf": 0.0,
-            "fallback": True,
-        })
-    return detections
-
-
-def select_quality_image(image_bgr: np.ndarray, detections: list[dict]) -> tuple[np.ndarray, dict | None]:
-    candidates = [det for det in detections if not det.get("fallback")]
-    if not candidates:
-        return image_bgr, None
-    h, w = image_bgr.shape[:2]
-    best = max(
-        candidates,
-        key=lambda det: (
-            max(0, det["bbox"][2] - det["bbox"][0])
-            * max(0, det["bbox"][3] - det["bbox"][1])
-            * max(0.05, float(det.get("yolo_conf", 0.0)))
-        ),
-    )
-    x1, y1, x2, y2 = best["bbox"]
-    box_area_ratio = (max(0, x2 - x1) * max(0, y2 - y1)) / float(max(1, h * w))
-    if box_area_ratio < MIN_QUALITY_CROP_AREA:
-        return image_bgr, None
-    pad = int(max(x2 - x1, y2 - y1) * 0.08)
-    x1 = max(0, x1 - pad)
-    y1 = max(0, y1 - pad)
-    x2 = min(w, x2 + pad)
-    y2 = min(h, y2 + pad)
-    if x2 <= x1 or y2 <= y1:
-        return image_bgr, None
-    return image_bgr[y1:y2, x1:x2], best
 
 
 def scale_params(image: np.ndarray) -> tuple[float, int, int]:
@@ -469,7 +434,7 @@ def root():
       file.addEventListener("change",()=>{capturedBlob=null;if(!file.files.length)return;stopCamera();showPreview(URL.createObjectURL(file.files[0]));sourceName.textContent="Uploaded image";});
       cameraButton.addEventListener("click",async()=>{if(stream){stopCamera();return;}try{stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"},audio:false});camera.srcObject=stream;await camera.play();preview.style.display="none";placeholder.style.display="none";camera.style.display="block";cameraButton.textContent="Stop Camera";captureButton.disabled=false;sourceName.textContent="Live camera";}catch(e){showError("Camera permission was denied or no camera is available.");}});
       captureButton.addEventListener("click",async()=>{if(!stream)return;captureButton.disabled=true;statusEl.textContent=robustMode.checked?"Capturing best frame...":"Capturing...";try{capturedBlob=await captureCameraBlob();file.value="";showPreview(URL.createObjectURL(capturedBlob));sourceName.textContent="Captured frame";stopCamera();statusEl.textContent="Frame ready";}catch(e){showError("Could not capture a clean camera frame.");captureButton.disabled=false;}});
-      form.addEventListener("submit",async(event)=>{event.preventDefault();if(!file.files.length&&!capturedBlob){showError("Choose an image or capture a camera frame first.");return;}statusEl.textContent="Grading...";submit.disabled=true;probabilities.innerHTML="";const data=new FormData();data.append("file",capturedBlob||file.files[0],capturedBlob?"camera-robust-frame.jpg":file.files[0].name);if(capturedBlob&&robustMode.checked)data.append("robust_camera","true");try{const response=await fetch("/detect",{method:"POST",body:data});const result=await response.json();if(!response.ok)throw new Error(result.detail||"Backend could not grade this image.");const overall=result.overall||{},fruit=result.fruit||{};title.textContent=(overall.grade||"?")+" - "+(overall.label||"Quality");gradeName.textContent=overall.grade_label||overall.grade||"Unknown";qualityName.textContent=overall.label||"Unknown";fruitName.textContent=fruit.label||"Unknown";sourceName.textContent=(overall.source||"quality model").toString();detail.textContent="Quality confidence: "+Math.round((overall.class_conf||0)*100)+"%. Fruit: "+(fruit.label||"Unknown")+" ("+Math.round((fruit.confidence||0)*100)+"%).";preview.src="data:image/jpeg;base64,"+result.annotated_image;preview.style.display="block";placeholder.style.display="none";statusEl.textContent="Done";probabilities.innerHTML=Object.entries(overall.probabilities||{}).map(([k,v])=>'<div class="row"><strong>'+k+'</strong><span>'+Math.round(v*100)+'%</span></div>').join("");}catch(error){showError(error.message||"Unknown error");}finally{submit.disabled=false;}});
+      form.addEventListener("submit",async(event)=>{event.preventDefault();if(!file.files.length&&!capturedBlob){showError("Choose an image or capture a camera frame first.");return;}statusEl.textContent="Grading...";submit.disabled=true;probabilities.innerHTML="";const data=new FormData();data.append("file",capturedBlob||file.files[0],capturedBlob?"camera-robust-frame.jpg":file.files[0].name);if(capturedBlob&&robustMode.checked)data.append("robust_camera","true");try{const response=await fetch("/detect",{method:"POST",body:data});const result=await response.json();if(!response.ok)throw new Error(result.detail||"Backend could not grade this image.");const overall=result.overall||{},fruit=result.fruit||{};title.textContent=(overall.grade||"?")+" - "+(overall.label||"Quality");gradeName.textContent=overall.grade_label||overall.grade||"Unknown";qualityName.textContent=overall.label||"Unknown";fruitName.textContent=fruit.label||"Unknown";sourceName.textContent=((fruit.source||"fruit model")+" + "+(overall.source||"quality model")).toString();detail.textContent="Quality confidence: "+Math.round((overall.class_conf||0)*100)+"%. Fruit: "+(fruit.label||"Unknown")+" ("+Math.round((fruit.confidence||0)*100)+"%).";preview.src="data:image/jpeg;base64,"+result.annotated_image;preview.style.display="block";placeholder.style.display="none";statusEl.textContent="Done";probabilities.innerHTML=Object.entries(overall.probabilities||{}).map(([k,v])=>'<div class="row"><strong>'+k+'</strong><span>'+Math.round(v*100)+'%</span></div>').join("");}catch(error){showError(error.message||"Unknown error");}finally{submit.disabled=false;}});
     </script>
   </body>
 </html>
@@ -479,28 +444,29 @@ def root():
 @app.get("/health")
 def health():
     quality_classes = get_quality_classes() if QUALITY_CLASSES_PATH.exists() else list(QUALITY_CLASSES)
-    detector_ref = str(DETECTOR_MODEL_PATH if DETECTOR_MODEL_PATH.exists() else LIGHTWEIGHT_YOLO_FALLBACK)
+    fruit_classes = get_fruit_classes() if FRUIT_TYPE_CLASSES_PATH.exists() else []
     return {
         "status": "healthy",
         "timestamp": datetime.utcnow().isoformat(),
         "base_dir": str(BASE_DIR),
-        "model_mode": "minimal_pi5_ready",
+        "model_mode": "hf_fruit_classifier_minimal",
         "runtime_mode": RUNTIME_MODE,
         "runtime_model_count": 2,
-        "detector_model": detector_ref,
-        "detector_model_path": str(DETECTOR_MODEL_PATH),
-        "detector_custom_model_ready": DETECTOR_MODEL_PATH.exists(),
-        "detector_model_ready": DETECTOR_MODEL_PATH.exists() or LIGHTWEIGHT_YOLO_FALLBACK.endswith(".pt"),
-        "min_quality_crop_area": MIN_QUALITY_CROP_AREA,
+        "fruit_type_model": str(FRUIT_TYPE_TFLITE_PATH),
+        "fruit_type_model_ready": FRUIT_TYPE_TFLITE_PATH.exists() and FRUIT_TYPE_CLASSES_PATH.exists(),
+        "fruit_type_model_path": str(FRUIT_TYPE_TFLITE_PATH),
+        "fruit_type_classes_path": str(FRUIT_TYPE_CLASSES_PATH),
+        "fruit_type_class_count": len(fruit_classes),
+        "fruit_type_classes": fruit_classes,
         "quality_model": str(QUALITY_TFLITE_PATH),
         "quality_model_exists": QUALITY_TFLITE_PATH.exists(),
         "quality_model_ready": QUALITY_TFLITE_PATH.exists() and QUALITY_CLASSES_PATH.exists(),
         "quality_model_path": str(QUALITY_TFLITE_PATH),
         "keras_training_model_path": str(KERAS_QUALITY_MODEL_PATH),
         "quality_classes": quality_classes,
-        "grading_mode": "quality_first_minimal",
-        "fruit_name_source": "detector_class",
-        "removed_runtime_models": ["clip", "vgg19", "mobilenet_imagenet", "yolov8x"],
+        "grading_mode": "quality_first_hf_fruit_classifier",
+        "fruit_name_source": "fruit_type_tflite_model",
+        "removed_runtime_models": ["clip", "vgg19", "mobilenet_imagenet", "yolov8x", "yolov8n_runtime"],
     }
 
 
@@ -524,29 +490,29 @@ async def detect(
     if robust_requested:
         image = robust_camera_preprocess(image)
 
-    detections = yolo_detect(image)
-    fruit_meta = fruit_meta_from_detections(detections)
-    quality_image, quality_detection = select_quality_image(image, detections)
     try:
-        quality = classify_quality(quality_image)
+        fruit_meta = classify_fruit_type(image)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    try:
+        quality = classify_quality(image)
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
-    final_detections = []
-    for det in detections:
-        final_detections.append({
-            **det,
-            "fruit_name": fruit_meta["fruit_name"],
-            "fruit_label": display_name(fruit_meta["fruit_name"]),
-            "fruit_conf": fruit_meta["fruit_conf"],
-            "fruit_source": fruit_meta["fruit_source"],
-            "class": quality["class"],
-            "label": quality["label"],
-            "class_conf": quality["class_conf"],
-        })
+    h, w = image.shape[:2]
+    final_detections = [{
+        "bbox": [0, 0, w, h],
+        "fruit_name": fruit_meta["fruit_name"],
+        "fruit_label": display_name(fruit_meta["fruit_name"]),
+        "fruit_conf": fruit_meta["fruit_conf"],
+        "fruit_source": fruit_meta["fruit_source"],
+        "class": quality["class"],
+        "label": quality["label"],
+        "class_conf": quality["class_conf"],
+        "full_frame": True,
+    }]
 
     annotated = annotate_image(image.copy(), final_detections, fruit_meta, quality)
-    h, w = image.shape[:2]
     return {
         "annotated_image": image_to_base64(annotated),
         "detections": final_detections,
@@ -563,8 +529,8 @@ async def detect(
             "robust_camera": robust_requested,
             "input_size": {"width": int(input_w), "height": int(input_h)},
             "processed_size": {"width": int(w), "height": int(h)},
-            "quality_crop": quality_detection["bbox"] if quality_detection else None,
+            "quality_crop": None,
         },
         "total": len(final_detections),
-        "used_fallback": any(det.get("fallback", False) for det in detections),
+        "used_fallback": False,
     }
