@@ -8,14 +8,14 @@ from pathlib import Path
 def main() -> None:
     parser = argparse.ArgumentParser(description="Train a custom YOLO fruit detector.")
     parser.add_argument("--data", default="data/fruits360-yolo/fruit_yolo.yaml")
-    parser.add_argument("--model", default="yolov8x.pt")
+    parser.add_argument("--model", default="yolov8n.pt")
     parser.add_argument("--epochs", type=int, default=50)
     parser.add_argument("--imgsz", type=int, default=640)
     parser.add_argument("--batch", type=int, default=8)
     parser.add_argument("--device", default="cpu")
     parser.add_argument("--project", default="runs/fruit-yolo")
-    parser.add_argument("--name", default="yolov8x-fruits")
-    parser.add_argument("--output", default="models/custom_fruit_yolo.pt")
+    parser.add_argument("--name", default="yolov8n-fruits")
+    parser.add_argument("--output", default="models/custom_fruit_detector.pt")
     args = parser.parse_args()
 
     from ultralytics import YOLO
