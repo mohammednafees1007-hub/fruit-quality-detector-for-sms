@@ -29,6 +29,19 @@ YOLO_CONFIDENCE = float(os.environ.get("YOLO_CONFIDENCE", "0.12"))
 YOLO_IMAGE_SIZE = int(os.environ.get("YOLO_IMAGE_SIZE", "960"))
 IMG_SIZE = 224
 
+# Runtime decision controls. These do not retrain the model; they decide when a
+# prediction is confident enough to be shown as a final grade.
+QUALITY_MIN_CONFIDENCE = float(os.environ.get("QUALITY_MIN_CONFIDENCE", "0.40"))
+QUALITY_CLASS_THRESHOLDS = {
+    "fresh": float(os.environ.get("QUALITY_THRESHOLD_FRESH", os.environ.get("QUALITY_MIN_CONFIDENCE", "0.40"))),
+    "adulterated": float(os.environ.get("QUALITY_THRESHOLD_ADULTERATED", os.environ.get("QUALITY_MIN_CONFIDENCE", "0.40"))),
+    "rotten": float(os.environ.get("QUALITY_THRESHOLD_ROTTEN", os.environ.get("QUALITY_MIN_CONFIDENCE", "0.40"))),
+}
+FRUIT_GATE_ENABLED = os.environ.get("FRUIT_GATE_ENABLED", "false").lower() in {"1", "true", "yes", "on"}
+FRUIT_GATE_MODE = os.environ.get("FRUIT_GATE_MODE", "any").lower()
+FRUIT_MIN_CONFIDENCE = float(os.environ.get("FRUIT_MIN_CONFIDENCE", "0.12"))
+YOLO_MIN_REAL_FRUIT_CONFIDENCE = float(os.environ.get("YOLO_MIN_REAL_FRUIT_CONFIDENCE", "0.18"))
+
 QUALITY_CLASSES = ["adulterated", "fresh", "rotten"]
 QUALITY_DISPLAY = {
     "adulterated": "Adulterant",
@@ -103,6 +116,17 @@ def display_name(name: str | None) -> str:
     if not name or name in {"unknown", "full_image"}:
         return "Unknown"
     return name.replace("_", " ").title()
+
+
+def threshold_config() -> dict:
+    return {
+        "quality_min_confidence": QUALITY_MIN_CONFIDENCE,
+        "quality_class_thresholds": QUALITY_CLASS_THRESHOLDS,
+        "fruit_gate_enabled": FRUIT_GATE_ENABLED,
+        "fruit_gate_mode": FRUIT_GATE_MODE,
+        "fruit_min_confidence": FRUIT_MIN_CONFIDENCE,
+        "yolo_min_real_fruit_confidence": YOLO_MIN_REAL_FRUIT_CONFIDENCE,
+    }
 
 
 def get_yolo():
@@ -197,6 +221,79 @@ def classify_quality(image_bgr: np.ndarray) -> dict:
             for i in range(min(len(quality_classes), len(preds)))
         },
         "source": "keras_quality_model",
+    }
+
+
+def uncertain_quality(reason: str, message: str, base_quality: dict | None = None) -> dict:
+    base_quality = base_quality or {}
+    original_class = base_quality.get("class")
+    original_conf = float(base_quality.get("class_conf", 0.0) or 0.0)
+    return {
+        "class": "uncertain",
+        "label": "Uncertain",
+        "grade": "?",
+        "grade_label": "Manual Review",
+        "class_conf": round(original_conf, 4),
+        "probabilities": base_quality.get("probabilities", {}),
+        "source": base_quality.get("source", "decision_gate"),
+        "accepted": False,
+        "reject_reason": reason,
+        "message": message,
+        "original_class": original_class,
+        "original_label": base_quality.get("label"),
+        "original_grade": base_quality.get("grade"),
+    }
+
+
+def apply_quality_thresholds(quality: dict) -> dict:
+    class_name = quality.get("class")
+    confidence = float(quality.get("class_conf", 0.0) or 0.0)
+    required = QUALITY_CLASS_THRESHOLDS.get(class_name, QUALITY_MIN_CONFIDENCE)
+    if confidence < required:
+        gated = uncertain_quality(
+            "low_quality_confidence",
+            f"Quality confidence {int(confidence * 100)}% is below the required {int(required * 100)}%.",
+            quality,
+        )
+        gated["required_confidence"] = required
+        return gated
+    quality["accepted"] = True
+    quality["required_confidence"] = required
+    return quality
+
+
+def fruit_gate_decision(detections: list[dict], fruit_meta: dict) -> dict:
+    best_real_detection = None
+    for det in detections:
+        if det.get("fallback"):
+            continue
+        if float(det.get("yolo_conf", 0.0) or 0.0) >= YOLO_MIN_REAL_FRUIT_CONFIDENCE:
+            if best_real_detection is None or float(det.get("yolo_conf", 0.0)) > float(best_real_detection.get("yolo_conf", 0.0)):
+                best_real_detection = det
+
+    fruit_name = fruit_meta.get("fruit_name")
+    fruit_conf = float(fruit_meta.get("fruit_conf", 0.0) or 0.0)
+    yolo_ok = best_real_detection is not None
+    fruit_name_ok = bool(fruit_name and fruit_name != "unknown" and fruit_conf >= FRUIT_MIN_CONFIDENCE)
+    if FRUIT_GATE_MODE == "both":
+        accepted = yolo_ok and fruit_name_ok
+    else:
+        accepted = yolo_ok or fruit_name_ok
+
+    return {
+        "enabled": FRUIT_GATE_ENABLED,
+        "accepted": accepted,
+        "mode": FRUIT_GATE_MODE,
+        "yolo_ok": yolo_ok,
+        "fruit_name_ok": fruit_name_ok,
+        "best_yolo_class": best_real_detection.get("yolo_class") if best_real_detection else None,
+        "best_yolo_confidence": best_real_detection.get("yolo_conf") if best_real_detection else 0.0,
+        "fruit_name": fruit_name,
+        "fruit_confidence": fruit_conf,
+        "thresholds": {
+            "fruit_min_confidence": FRUIT_MIN_CONFIDENCE,
+            "yolo_min_real_fruit_confidence": YOLO_MIN_REAL_FRUIT_CONFIDENCE,
+        },
     }
 
 
@@ -437,7 +534,10 @@ def annotate_image(image: np.ndarray, detections: list[dict], fruit: dict, quali
     for det in detections:
         x1, y1, x2, y2 = det["bbox"]
         cv2.rectangle(image, (x1, y1), (x2, y2), color, thickness)
-        label = f"{quality.get('grade', '?')} - {quality['label'].upper()} {int(quality['class_conf'] * 100)}% | {display_name(fruit['fruit_name']).upper()}"
+        if quality.get("accepted", True) is False:
+            label = f"REVIEW - {quality['label'].upper()} | {display_name(fruit['fruit_name']).upper()}"
+        else:
+            label = f"{quality.get('grade', '?')} - {quality['label'].upper()} {int(quality['class_conf'] * 100)}% | {display_name(fruit['fruit_name']).upper()}"
         (tw, th), base = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thickness)
         lh = th + base + pad * 2
         lx1 = x1
@@ -781,7 +881,7 @@ def root():
       function showPreview(src){preview.classList.remove("visible");preview.src=src;preview.style.display="block";requestAnimationFrame(()=>preview.classList.add("visible"));camera.classList.remove("visible");camera.style.display="none";placeholder.style.display="none";}
       function applyGradeState(overall){const grade=(overall.grade||"").toLowerCase();resultPanel.classList.remove("grade-a","grade-b","grade-c","result-flash");if(grade==="a")resultPanel.classList.add("grade-a");else if(grade==="b")resultPanel.classList.add("grade-b");else if(grade==="c")resultPanel.classList.add("grade-c");gradeBadge.textContent=overall.grade||"--";requestAnimationFrame(()=>{resultPanel.classList.add("result-flash");setTimeout(()=>resultPanel.classList.remove("result-flash"),720);});}
       function renderProbabilities(items){probabilities.innerHTML=Object.entries(items||{}).map(([k,v])=>{const pct=Math.round((Number(v)||0)*100);return '<div class="prob-row"><div class="prob-head"><strong>'+k+'</strong><span>'+pct+'%</span></div><div class="prob-track"><span class="prob-fill" data-pct="'+pct+'"></span></div></div>';}).join("");requestAnimationFrame(()=>document.querySelectorAll(".prob-fill").forEach(el=>{el.style.width=el.dataset.pct+"%";}));}
-      function recommendationFor(overall){const grade=(overall.grade||"").toUpperCase();if(grade==="A")return["Safe to buy","No major defects detected."];if(grade==="B")return["Use soon","Possible adulteration, damage, or moderate-quality indicators detected."];if(grade==="C")return["Avoid","Spoilage indicators detected. Not recommended for purchase."];return["Review result","The backend returned an unknown grade."];}
+      function recommendationFor(overall,decision=null){if(overall&&overall.accepted===false)return["Manual review",decision&&decision.message?decision.message:"Prediction confidence is below the selected threshold."];const grade=(overall.grade||"").toUpperCase();if(grade==="A")return["Safe to buy","No major defects detected."];if(grade==="B")return["Use soon","Possible adulteration, damage, or moderate-quality indicators detected."];if(grade==="C")return["Avoid","Spoilage indicators detected. Not recommended for purchase."];return["Review result","The backend returned an unknown grade."];}
       function probabilityFor(quality,confidence){const conf=Math.max(0,Math.min(1,confidence));if(quality==="Fresh")return{adulterated:0.04,fresh:conf,rotten:Math.max(0.02,1-conf-.04)};if(quality==="Rotten")return{adulterated:0.06,fresh:0.03,rotten:conf};return{adulterated:conf,fresh:0.10,rotten:Math.max(0.04,1-conf-.10)};}
       function sampleOverrideFrom(button){if(!button)return null;const quality=button.dataset.quality||"Fresh",grade=button.dataset.grade||"A",confidence=(Number(button.dataset.confidence)||90)/100;return{overall:{label:quality,grade:grade,grade_label:"Grade "+grade,class_conf:confidence,probabilities:probabilityFor(quality,confidence)},fruit:{label:button.dataset.fruit||"Fruit",confidence:.96},presentation:true};}
       function updateDashboard(overall,durationSec){const grade=(overall.grade||"").toUpperCase(),quality=(overall.label||"").toLowerCase(),score=Math.round((overall.class_conf||0)*100);dashboardState.total+=1;if(grade==="A"||quality==="fresh")dashboardState.fresh+=1;if(grade==="B"||grade==="C"||quality==="adulterant"||quality==="rotten")dashboardState.defective+=1;dashboardState.scoreSum+=score;dashboardState.timeSum+=durationSec;totalScans.textContent=dashboardState.total.toLocaleString("en-US");freshRate.textContent=Math.round((dashboardState.fresh/dashboardState.total)*100)+"%";defectiveRate.textContent=Math.round((dashboardState.defective/dashboardState.total)*100)+"%";avgScore.textContent=Math.round(dashboardState.scoreSum/dashboardState.total)+"%";avgTime.textContent=(dashboardState.timeSum/dashboardState.total).toFixed(1)+"s";}
@@ -799,7 +899,7 @@ def root():
       dropZone.addEventListener("drop",event=>{event.preventDefault();dropZone.classList.remove("dragging");loadFile(event.dataTransfer.files[0]);});
       cameraButton.addEventListener("click",async()=>{if(stream){stopCamera();return;}try{stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"},audio:false});camera.srcObject=stream;await camera.play();preview.classList.remove("visible");preview.style.display="none";placeholder.style.display="none";camera.style.display="block";requestAnimationFrame(()=>camera.classList.add("visible"));cameraButton.textContent="Stop Camera";captureButton.disabled=false;setStatus("Camera live");setProcess("Camera is live. Capture a frame when the fruit is clear.","Live");}catch(e){showError("Camera permission was denied or no camera is available.");}});
       captureButton.addEventListener("click",async()=>{if(!stream)return;captureButton.disabled=true;setStatus(robustMode.checked?"Capturing best frame...":"Capturing...","analyzing");setProcess(robustMode.checked?"Capturing multiple frames and choosing the sharpest one.":"Capturing one frame.","Capturing");try{capturedBlob=await captureCameraBlob();file.value="";showPreview(URL.createObjectURL(capturedBlob));stopCamera();setStatus("Frame ready");setProcess("Frame captured. Press Analyze to start grading.","Ready");}catch(e){showError("Could not capture a clean camera frame.");captureButton.disabled=false;}});
-      async function analyzeCurrentImage(override=null){if(!file.files.length&&!capturedBlob){showError("Choose an image or capture a camera frame first.");return;}startProgress();const data=new FormData();data.append("file",capturedBlob||file.files[0],capturedBlob?"camera-robust-frame.jpg":file.files[0].name);if(capturedBlob&&robustMode.checked)data.append("robust_camera","true");try{const response=await fetch("/detect",{method:"POST",body:data});const result=await response.json();if(!response.ok)throw new Error(result.detail||"Backend could not grade this image.");const durationSec=Math.max(.1,(Date.now()-startedAt)/1000),overall=override?override.overall:(result.overall||{}),fruit=override?override.fruit:(result.fruit||{}),rec=recommendationFor(overall);finishProgress();applyGradeState(overall);updateReportScore(overall);title.textContent=(overall.grade||"?")+" - "+(overall.label||"Quality");gradeName.textContent=overall.grade_label||("Grade "+(overall.grade||"?"));qualityName.textContent=overall.label||"Unknown";fruitName.textContent=fruit.label||"Unknown";confidenceName.textContent=Math.round((overall.class_conf||0)*100)+"%";recommendation.textContent=rec[0];defects.textContent=override?"Gallery sample report matched to the selected example for presentation.":rec[1];detail.textContent="Fruit: "+(fruit.label||"Unknown")+" ("+Math.round((fruit.confidence||0)*100)+"%). Quality confidence: "+Math.round((overall.class_conf||0)*100)+"%.";if(result.annotated_image&&!override)showPreview("data:image/jpeg;base64,"+result.annotated_image);setStatus("Done","done");renderProbabilities(overall.probabilities||{});updateDashboard(overall,durationSec);addHistory(overall,fruit,durationSec);}catch(error){showError(error.message||"Unknown error");}finally{lockControls(false);}}
+      async function analyzeCurrentImage(override=null){if(!file.files.length&&!capturedBlob){showError("Choose an image or capture a camera frame first.");return;}startProgress();const data=new FormData();data.append("file",capturedBlob||file.files[0],capturedBlob?"camera-robust-frame.jpg":file.files[0].name);if(capturedBlob&&robustMode.checked)data.append("robust_camera","true");try{const response=await fetch("/detect",{method:"POST",body:data});const result=await response.json();if(!response.ok)throw new Error(result.detail||"Backend could not grade this image.");const durationSec=Math.max(.1,(Date.now()-startedAt)/1000),overall=override?override.overall:(result.overall||{}),fruit=override?override.fruit:(result.fruit||{}),decision=result.decision||{},rec=recommendationFor(overall,decision);finishProgress();applyGradeState(overall);updateReportScore(overall);title.textContent=(overall.grade||"?")+" - "+(overall.label||"Quality");gradeName.textContent=overall.grade_label||("Grade "+(overall.grade||"?"));qualityName.textContent=overall.label||"Unknown";fruitName.textContent=fruit.label||"Unknown";confidenceName.textContent=Math.round((overall.class_conf||0)*100)+"%";recommendation.textContent=rec[0];defects.textContent=override?"Gallery sample report matched to the selected example for presentation.":rec[1];detail.textContent="Fruit: "+(fruit.label||"Unknown")+" ("+Math.round((fruit.confidence||0)*100)+"%). Quality confidence: "+Math.round((overall.class_conf||0)*100)+"%.";if(overall.accepted===false&&decision.message)detail.textContent=decision.message+" Fruit: "+(fruit.label||"Unknown")+".";if(result.annotated_image&&!override)showPreview("data:image/jpeg;base64,"+result.annotated_image);setStatus("Done","done");renderProbabilities(overall.probabilities||{});updateDashboard(overall,durationSec);addHistory(overall,fruit,durationSec);}catch(error){showError(error.message||"Unknown error");}finally{lockControls(false);}}
       async function tryGallerySample(button){const url=button.dataset.url,titleText=button.dataset.title||"gallery-sample",override=sampleOverrideFrom(button);document.querySelector("#detect").scrollIntoView({behavior:"smooth",block:"start"});setStatus("Loading sample","analyzing");setProcess("Loading gallery sample and preparing matched report.","Gallery sample");try{button.disabled=true;const response=await fetch(url,{mode:"cors"});if(!response.ok)throw new Error("Gallery sample image could not be downloaded.");const blob=await response.blob();const sampleFile=new File([blob],titleText+".jpg",{type:blob.type||"image/jpeg"});loadFile(sampleFile);await sleep(350);await analyzeCurrentImage(override);}catch(error){showError((error&&error.message)||"Could not run the gallery sample. Upload your own image instead.");}finally{button.disabled=false;}}
       form.addEventListener("submit",event=>{event.preventDefault();analyzeCurrentImage();});
       sampleButtons.forEach(button=>button.addEventListener("click",()=>tryGallerySample(button)));
@@ -829,6 +929,7 @@ def health():
         "clip_cached_files": clip_files,
         "vgg19_fallback": True,
         "mobilenet_fallback": True,
+        "thresholds": threshold_config(),
     }
 
 
@@ -855,11 +956,19 @@ async def detect(
 
     detections = yolo_detect(image)
     fruit_meta = classify_fruit_name(raw_image if robust_requested else image)
+    fruit_gate = fruit_gate_decision(detections, fruit_meta)
     quality_image, quality_detection = select_quality_image(image, detections)
-    try:
-        quality = classify_quality(quality_image)
-    except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    if FRUIT_GATE_ENABLED and not fruit_gate["accepted"]:
+        quality = uncertain_quality(
+            "no_reliable_fruit_detected",
+            "No reliable real-fruit signal was detected. Use a real fruit or a clearer image.",
+        )
+    else:
+        try:
+            quality = classify_quality(quality_image)
+            quality = apply_quality_thresholds(quality)
+        except RuntimeError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     final_detections = []
     for det in detections:
@@ -893,6 +1002,13 @@ async def detect(
             "input_size": {"width": int(input_w), "height": int(input_h)},
             "processed_size": {"width": int(w), "height": int(h)},
             "quality_crop": quality_detection["bbox"] if quality_detection else None,
+        },
+        "decision": {
+            "fruit_gate": fruit_gate,
+            "quality_accepted": quality.get("accepted", True),
+            "reject_reason": quality.get("reject_reason"),
+            "message": quality.get("message"),
+            "thresholds": threshold_config(),
         },
         "total": len(final_detections),
         "used_fallback": any(det.get("fallback", False) for det in detections),
