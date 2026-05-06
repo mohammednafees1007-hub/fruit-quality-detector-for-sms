@@ -15,5 +15,6 @@ set FRUIT_GATE_ENABLED=false
 set FRUIT_GATE_MODE=any
 set FRUIT_MIN_CONFIDENCE=0.12
 set YOLO_MIN_REAL_FRUIT_CONFIDENCE=0.18
+set FRUIT_NAMING_ENABLED=true
 
 .\.venv\Scripts\python.exe -m uvicorn main:app --host 127.0.0.1 --port 8000

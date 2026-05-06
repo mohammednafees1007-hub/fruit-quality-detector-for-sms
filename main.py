@@ -41,6 +41,7 @@ FRUIT_GATE_ENABLED = os.environ.get("FRUIT_GATE_ENABLED", "false").lower() in {"
 FRUIT_GATE_MODE = os.environ.get("FRUIT_GATE_MODE", "any").lower()
 FRUIT_MIN_CONFIDENCE = float(os.environ.get("FRUIT_MIN_CONFIDENCE", "0.12"))
 YOLO_MIN_REAL_FRUIT_CONFIDENCE = float(os.environ.get("YOLO_MIN_REAL_FRUIT_CONFIDENCE", "0.18"))
+FRUIT_NAMING_ENABLED = os.environ.get("FRUIT_NAMING_ENABLED", "true").lower() in {"1", "true", "yes", "on"}
 
 QUALITY_CLASSES = ["adulterated", "fresh", "rotten"]
 QUALITY_DISPLAY = {
@@ -127,6 +128,7 @@ def threshold_config(
     fruit_gate_mode: str | None = None,
     fruit_min_confidence: float | None = None,
     yolo_min_real_fruit_confidence: float | None = None,
+    fruit_naming_enabled: bool | None = None,
 ) -> dict:
     min_conf = QUALITY_MIN_CONFIDENCE if quality_min_confidence is None else float(quality_min_confidence)
     class_thresholds = {
@@ -141,6 +143,7 @@ def threshold_config(
         "fruit_gate_mode": (fruit_gate_mode or FRUIT_GATE_MODE).lower(),
         "fruit_min_confidence": FRUIT_MIN_CONFIDENCE if fruit_min_confidence is None else float(fruit_min_confidence),
         "yolo_min_real_fruit_confidence": YOLO_MIN_REAL_FRUIT_CONFIDENCE if yolo_min_real_fruit_confidence is None else float(yolo_min_real_fruit_confidence),
+        "fruit_naming_enabled": FRUIT_NAMING_ENABLED if fruit_naming_enabled is None else bool(fruit_naming_enabled),
     }
 
 
@@ -402,6 +405,33 @@ def classify_fruit_name(image_bgr: np.ndarray) -> dict:
         "fruit_source": "unavailable",
         "fruit_model": None,
         "fruit_candidates": [],
+    }
+
+
+def fruit_name_from_yolo(detections: list[dict]) -> dict:
+    candidates = [det for det in detections if not det.get("fallback") and det.get("yolo_class")]
+    if not candidates:
+        return {
+            "fruit_name": "unknown",
+            "fruit_conf": 0.0,
+            "fruit_source": "yolo_class_disabled_naming",
+            "fruit_model": None,
+            "fruit_candidates": [],
+        }
+    best = max(candidates, key=lambda det: float(det.get("yolo_conf", 0.0) or 0.0))
+    return {
+        "fruit_name": best.get("yolo_class", "unknown"),
+        "fruit_conf": round(float(best.get("yolo_conf", 0.0) or 0.0), 4),
+        "fruit_source": "yolo_class",
+        "fruit_model": str(YOLO_MODEL_PATH),
+        "fruit_candidates": [
+            {
+                "fruit_name": det.get("yolo_class", "unknown"),
+                "confidence": det.get("yolo_conf", 0.0),
+                "source": "yolo_class",
+            }
+            for det in candidates[:5]
+        ],
     }
 
 
@@ -820,6 +850,7 @@ def root():
               <label class="setting"><div class="setting-head">Rotten threshold <b><span id="rottenThresholdValue">40</span>%</b></div><input id="rottenThreshold" type="range" min="0" max="95" value="40" step="5"></label>
               <label class="setting"><div class="setting-head">Fruit-name confidence <b><span id="fruitThresholdValue">12</span>%</b></div><input id="fruitThreshold" type="range" min="0" max="95" value="12" step="1"></label>
               <label class="setting"><div class="setting-head">YOLO fruit confidence <b><span id="yoloThresholdValue">18</span>%</b></div><input id="yoloThreshold" type="range" min="0" max="95" value="18" step="1"></label>
+              <label class="setting toggle-setting"><div><div class="setting-head">Fruit naming model</div><p class="detail" style="margin:6px 0 0">Turn off for faster YOLO-only fruit name.</p></div><input id="fruitNamingEnabled" type="checkbox" checked></label>
               <label class="setting toggle-setting"><div><div class="setting-head">Reject non-fruit</div><p class="detail" style="margin:6px 0 0">Use this for toy/object rejection.</p></div><input id="fruitGateEnabled" type="checkbox"></label>
               <label class="setting"><div class="setting-head">Fruit gate mode</div><select id="fruitGateMode"><option value="any">Any fruit signal</option><option value="both">YOLO + fruit name</option></select></label>
             </div>
@@ -903,7 +934,7 @@ def root():
       <footer class="section" style="padding-top:0"><p class="detail">Built for Fruit Quality Detector for SMS. The style is clean and premium, but no Apple branding, logo, or copied design is used.</p></footer>
     </main>
     <script>
-      const form=document.querySelector("#form"),file=document.querySelector("#file"),statusEl=document.querySelector("#status"),submit=document.querySelector("#submit"),preview=document.querySelector("#preview"),camera=document.querySelector("#camera"),canvas=document.querySelector("#canvas"),cameraButton=document.querySelector("#cameraButton"),captureButton=document.querySelector("#captureButton"),robustMode=document.querySelector("#robustMode"),placeholder=document.querySelector("#placeholder"),dropZone=document.querySelector("#dropZone"),resultPanel=document.querySelector("#resultPanel"),gradeBadge=document.querySelector("#gradeBadge"),title=document.querySelector("#title"),detail=document.querySelector("#detail"),gradeName=document.querySelector("#gradeName"),qualityName=document.querySelector("#qualityName"),fruitName=document.querySelector("#fruitName"),confidenceName=document.querySelector("#confidenceName"),recommendation=document.querySelector("#recommendation"),defects=document.querySelector("#defects"),scoreRing=document.querySelector("#scoreRing"),scoreValue=document.querySelector("#scoreValue"),probabilities=document.querySelector("#probabilities"),loading=document.querySelector("#loading"),loadingTitle=document.querySelector("#loadingTitle"),loadingDetail=document.querySelector("#loadingDetail"),eta=document.querySelector("#eta"),progressCircle=document.querySelector("#progressCircle"),progressText=document.querySelector("#progressText"),processText=document.querySelector("#processText"),processTime=document.querySelector("#processTime"),historyList=document.querySelector("#historyList"),totalScans=document.querySelector("#totalScans"),freshRate=document.querySelector("#freshRate"),defectiveRate=document.querySelector("#defectiveRate"),avgScore=document.querySelector("#avgScore"),avgTime=document.querySelector("#avgTime"),freshThreshold=document.querySelector("#freshThreshold"),adulteratedThreshold=document.querySelector("#adulteratedThreshold"),rottenThreshold=document.querySelector("#rottenThreshold"),fruitThreshold=document.querySelector("#fruitThreshold"),yoloThreshold=document.querySelector("#yoloThreshold"),fruitGateEnabled=document.querySelector("#fruitGateEnabled"),fruitGateMode=document.querySelector("#fruitGateMode"),steps=[...document.querySelectorAll(".step")],sampleButtons=[...document.querySelectorAll(".try-sample")],settingsInputs=[freshThreshold,adulteratedThreshold,rottenThreshold,fruitThreshold,yoloThreshold,fruitGateEnabled,fruitGateMode];
+      const form=document.querySelector("#form"),file=document.querySelector("#file"),statusEl=document.querySelector("#status"),submit=document.querySelector("#submit"),preview=document.querySelector("#preview"),camera=document.querySelector("#camera"),canvas=document.querySelector("#canvas"),cameraButton=document.querySelector("#cameraButton"),captureButton=document.querySelector("#captureButton"),robustMode=document.querySelector("#robustMode"),placeholder=document.querySelector("#placeholder"),dropZone=document.querySelector("#dropZone"),resultPanel=document.querySelector("#resultPanel"),gradeBadge=document.querySelector("#gradeBadge"),title=document.querySelector("#title"),detail=document.querySelector("#detail"),gradeName=document.querySelector("#gradeName"),qualityName=document.querySelector("#qualityName"),fruitName=document.querySelector("#fruitName"),confidenceName=document.querySelector("#confidenceName"),recommendation=document.querySelector("#recommendation"),defects=document.querySelector("#defects"),scoreRing=document.querySelector("#scoreRing"),scoreValue=document.querySelector("#scoreValue"),probabilities=document.querySelector("#probabilities"),loading=document.querySelector("#loading"),loadingTitle=document.querySelector("#loadingTitle"),loadingDetail=document.querySelector("#loadingDetail"),eta=document.querySelector("#eta"),progressCircle=document.querySelector("#progressCircle"),progressText=document.querySelector("#progressText"),processText=document.querySelector("#processText"),processTime=document.querySelector("#processTime"),historyList=document.querySelector("#historyList"),totalScans=document.querySelector("#totalScans"),freshRate=document.querySelector("#freshRate"),defectiveRate=document.querySelector("#defectiveRate"),avgScore=document.querySelector("#avgScore"),avgTime=document.querySelector("#avgTime"),freshThreshold=document.querySelector("#freshThreshold"),adulteratedThreshold=document.querySelector("#adulteratedThreshold"),rottenThreshold=document.querySelector("#rottenThreshold"),fruitThreshold=document.querySelector("#fruitThreshold"),yoloThreshold=document.querySelector("#yoloThreshold"),fruitNamingEnabled=document.querySelector("#fruitNamingEnabled"),fruitGateEnabled=document.querySelector("#fruitGateEnabled"),fruitGateMode=document.querySelector("#fruitGateMode"),steps=[...document.querySelectorAll(".step")],sampleButtons=[...document.querySelectorAll(".try-sample")],settingsInputs=[freshThreshold,adulteratedThreshold,rottenThreshold,fruitThreshold,yoloThreshold,fruitNamingEnabled,fruitGateEnabled,fruitGateMode];
       let stream=null,capturedBlob=null,progressTimer=null,startedAt=0;
       const dashboardState={total:1248,fresh:973,defective:175,scoreSum:1248*86,timeSum:1248*18.4};
       const pipeline=[{t:0,p:8,title:"Reading image",text:"Preparing the selected image for analysis.",step:0},{t:1200,p:24,title:"Cleaning frame",text:"Applying robust camera cleanup when enabled.",step:1},{t:2800,p:46,title:"Checking fruit",text:"Running object detection and fruit-name checks.",step:2},{t:5200,p:70,title:"Grading quality",text:"Running quality classification for Fresh, Adulterant, or Rotten.",step:3},{t:8200,p:88,title:"Drawing result",text:"Building the annotated image and result panel.",step:3}];
@@ -912,7 +943,7 @@ def root():
       function setProcess(text,time){processText.textContent=text;processTime.textContent=time;}
       function thresholdNumber(el){return Math.max(0,Math.min(.95,(Number(el.value)||0)/100));}
       function updateSettingLabels(){document.querySelector("#freshThresholdValue").textContent=freshThreshold.value;document.querySelector("#adulteratedThresholdValue").textContent=adulteratedThreshold.value;document.querySelector("#rottenThresholdValue").textContent=rottenThreshold.value;document.querySelector("#fruitThresholdValue").textContent=fruitThreshold.value;document.querySelector("#yoloThresholdValue").textContent=yoloThreshold.value;}
-      function appendThresholdSettings(data){data.append("quality_threshold_fresh",thresholdNumber(freshThreshold).toFixed(2));data.append("quality_threshold_adulterated",thresholdNumber(adulteratedThreshold).toFixed(2));data.append("quality_threshold_rotten",thresholdNumber(rottenThreshold).toFixed(2));data.append("quality_min_confidence",Math.min(thresholdNumber(freshThreshold),thresholdNumber(adulteratedThreshold),thresholdNumber(rottenThreshold)).toFixed(2));data.append("fruit_gate_enabled",fruitGateEnabled.checked?"true":"false");data.append("fruit_gate_mode",fruitGateMode.value);data.append("fruit_min_confidence",thresholdNumber(fruitThreshold).toFixed(2));data.append("yolo_min_real_fruit_confidence",thresholdNumber(yoloThreshold).toFixed(2));}
+      function appendThresholdSettings(data){data.append("quality_threshold_fresh",thresholdNumber(freshThreshold).toFixed(2));data.append("quality_threshold_adulterated",thresholdNumber(adulteratedThreshold).toFixed(2));data.append("quality_threshold_rotten",thresholdNumber(rottenThreshold).toFixed(2));data.append("quality_min_confidence",Math.min(thresholdNumber(freshThreshold),thresholdNumber(adulteratedThreshold),thresholdNumber(rottenThreshold)).toFixed(2));data.append("fruit_naming_enabled",fruitNamingEnabled.checked?"true":"false");data.append("fruit_gate_enabled",fruitGateEnabled.checked?"true":"false");data.append("fruit_gate_mode",fruitGateMode.value);data.append("fruit_min_confidence",thresholdNumber(fruitThreshold).toFixed(2));data.append("yolo_min_real_fruit_confidence",thresholdNumber(yoloThreshold).toFixed(2));}
       function lockControls(locked){submit.disabled=locked;cameraButton.disabled=locked;file.disabled=locked;robustMode.disabled=locked;settingsInputs.forEach(el=>{el.disabled=locked;});captureButton.disabled=locked||!stream;}
       function showError(message){stopProgress();lockControls(false);title.textContent="Analysis failed";detail.innerHTML='<span class="error">'+message+"</span>";setStatus("Error","error-state");setProcess(message,"Error");loading.style.display="none";}
       function setCircleProgress(value){const pct=Math.max(0,Math.min(100,Math.round(value)));progressCircle.style.setProperty("--progress",pct);progressText.textContent=pct+"%";}
@@ -992,6 +1023,7 @@ async def detect(
     fruit_gate_mode: str | None = Form(None),
     fruit_min_confidence: float | None = Form(None),
     yolo_min_real_fruit_confidence: float | None = Form(None),
+    fruit_naming_enabled: bool | None = Form(None),
 ):
     query_robust = request.query_params.get("robust_camera")
     if query_robust is not None:
@@ -1017,9 +1049,13 @@ async def detect(
         fruit_gate_mode=fruit_gate_mode,
         fruit_min_confidence=fruit_min_confidence,
         yolo_min_real_fruit_confidence=yolo_min_real_fruit_confidence,
+        fruit_naming_enabled=fruit_naming_enabled,
     )
     detections = yolo_detect(image)
-    fruit_meta = classify_fruit_name(raw_image if robust_requested else image)
+    if request_thresholds["fruit_naming_enabled"]:
+        fruit_meta = classify_fruit_name(raw_image if robust_requested else image)
+    else:
+        fruit_meta = fruit_name_from_yolo(detections)
     fruit_gate = fruit_gate_decision(detections, fruit_meta, request_thresholds)
     quality_image, quality_detection = select_quality_image(image, detections)
     if request_thresholds["fruit_gate_enabled"] and not fruit_gate["accepted"]:
