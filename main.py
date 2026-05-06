@@ -118,14 +118,29 @@ def display_name(name: str | None) -> str:
     return name.replace("_", " ").title()
 
 
-def threshold_config() -> dict:
+def threshold_config(
+    quality_min_confidence: float | None = None,
+    quality_threshold_fresh: float | None = None,
+    quality_threshold_adulterated: float | None = None,
+    quality_threshold_rotten: float | None = None,
+    fruit_gate_enabled: bool | None = None,
+    fruit_gate_mode: str | None = None,
+    fruit_min_confidence: float | None = None,
+    yolo_min_real_fruit_confidence: float | None = None,
+) -> dict:
+    min_conf = QUALITY_MIN_CONFIDENCE if quality_min_confidence is None else float(quality_min_confidence)
+    class_thresholds = {
+        "fresh": QUALITY_CLASS_THRESHOLDS["fresh"] if quality_threshold_fresh is None else float(quality_threshold_fresh),
+        "adulterated": QUALITY_CLASS_THRESHOLDS["adulterated"] if quality_threshold_adulterated is None else float(quality_threshold_adulterated),
+        "rotten": QUALITY_CLASS_THRESHOLDS["rotten"] if quality_threshold_rotten is None else float(quality_threshold_rotten),
+    }
     return {
-        "quality_min_confidence": QUALITY_MIN_CONFIDENCE,
-        "quality_class_thresholds": QUALITY_CLASS_THRESHOLDS,
-        "fruit_gate_enabled": FRUIT_GATE_ENABLED,
-        "fruit_gate_mode": FRUIT_GATE_MODE,
-        "fruit_min_confidence": FRUIT_MIN_CONFIDENCE,
-        "yolo_min_real_fruit_confidence": YOLO_MIN_REAL_FRUIT_CONFIDENCE,
+        "quality_min_confidence": min_conf,
+        "quality_class_thresholds": class_thresholds,
+        "fruit_gate_enabled": FRUIT_GATE_ENABLED if fruit_gate_enabled is None else bool(fruit_gate_enabled),
+        "fruit_gate_mode": (fruit_gate_mode or FRUIT_GATE_MODE).lower(),
+        "fruit_min_confidence": FRUIT_MIN_CONFIDENCE if fruit_min_confidence is None else float(fruit_min_confidence),
+        "yolo_min_real_fruit_confidence": YOLO_MIN_REAL_FRUIT_CONFIDENCE if yolo_min_real_fruit_confidence is None else float(yolo_min_real_fruit_confidence),
     }
 
 
@@ -245,10 +260,11 @@ def uncertain_quality(reason: str, message: str, base_quality: dict | None = Non
     }
 
 
-def apply_quality_thresholds(quality: dict) -> dict:
+def apply_quality_thresholds(quality: dict, config: dict | None = None) -> dict:
+    config = config or threshold_config()
     class_name = quality.get("class")
     confidence = float(quality.get("class_conf", 0.0) or 0.0)
-    required = QUALITY_CLASS_THRESHOLDS.get(class_name, QUALITY_MIN_CONFIDENCE)
+    required = config["quality_class_thresholds"].get(class_name, config["quality_min_confidence"])
     if confidence < required:
         gated = uncertain_quality(
             "low_quality_confidence",
@@ -262,28 +278,29 @@ def apply_quality_thresholds(quality: dict) -> dict:
     return quality
 
 
-def fruit_gate_decision(detections: list[dict], fruit_meta: dict) -> dict:
+def fruit_gate_decision(detections: list[dict], fruit_meta: dict, config: dict | None = None) -> dict:
+    config = config or threshold_config()
     best_real_detection = None
     for det in detections:
         if det.get("fallback"):
             continue
-        if float(det.get("yolo_conf", 0.0) or 0.0) >= YOLO_MIN_REAL_FRUIT_CONFIDENCE:
+        if float(det.get("yolo_conf", 0.0) or 0.0) >= config["yolo_min_real_fruit_confidence"]:
             if best_real_detection is None or float(det.get("yolo_conf", 0.0)) > float(best_real_detection.get("yolo_conf", 0.0)):
                 best_real_detection = det
 
     fruit_name = fruit_meta.get("fruit_name")
     fruit_conf = float(fruit_meta.get("fruit_conf", 0.0) or 0.0)
     yolo_ok = best_real_detection is not None
-    fruit_name_ok = bool(fruit_name and fruit_name != "unknown" and fruit_conf >= FRUIT_MIN_CONFIDENCE)
-    if FRUIT_GATE_MODE == "both":
+    fruit_name_ok = bool(fruit_name and fruit_name != "unknown" and fruit_conf >= config["fruit_min_confidence"])
+    if config["fruit_gate_mode"] == "both":
         accepted = yolo_ok and fruit_name_ok
     else:
         accepted = yolo_ok or fruit_name_ok
 
     return {
-        "enabled": FRUIT_GATE_ENABLED,
+        "enabled": config["fruit_gate_enabled"],
         "accepted": accepted,
-        "mode": FRUIT_GATE_MODE,
+        "mode": config["fruit_gate_mode"],
         "yolo_ok": yolo_ok,
         "fruit_name_ok": fruit_name_ok,
         "best_yolo_class": best_real_detection.get("yolo_class") if best_real_detection else None,
@@ -291,8 +308,8 @@ def fruit_gate_decision(detections: list[dict], fruit_meta: dict) -> dict:
         "fruit_name": fruit_name,
         "fruit_confidence": fruit_conf,
         "thresholds": {
-            "fruit_min_confidence": FRUIT_MIN_CONFIDENCE,
-            "yolo_min_real_fruit_confidence": YOLO_MIN_REAL_FRUIT_CONFIDENCE,
+            "fruit_min_confidence": config["fruit_min_confidence"],
+            "yolo_min_real_fruit_confidence": config["yolo_min_real_fruit_confidence"],
         },
     }
 
@@ -677,6 +694,18 @@ def root():
       .process-head { display:flex; justify-content:space-between; gap:12px; color:var(--muted); font-size:.88rem; font-weight:950; }
       .process-text { margin:8px 0 0; color:var(--ink); line-height:1.45; }
       .error { color:var(--bad); font-weight:950; }
+      .settings-bar { margin-top:14px; border:1px solid var(--line); border-radius:24px; background:rgba(255,255,255,.72); padding:15px; }
+      .settings-summary { display:flex; align-items:center; justify-content:space-between; gap:12px; cursor:pointer; font-weight:950; color:var(--ink); }
+      .settings-summary::-webkit-details-marker { display:none; }
+      .settings-summary span { color:var(--muted); font-size:.82rem; font-weight:850; }
+      .settings-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin-top:14px; }
+      .setting { min-width:0; border:1px solid #e5efe8; border-radius:18px; background:rgba(247,250,248,.9); padding:12px; }
+      .setting-head { display:flex; justify-content:space-between; gap:10px; align-items:center; color:var(--muted); font-size:.82rem; font-weight:950; text-transform:uppercase; letter-spacing:.08em; }
+      .setting-head b { color:var(--ink); font-size:.9rem; letter-spacing:0; text-transform:none; }
+      .setting input[type=range] { width:100%; margin-top:10px; accent-color:var(--leaf); }
+      .setting select { width:100%; margin-top:10px; min-height:38px; border:1px solid var(--line); border-radius:12px; padding:0 10px; background:white; color:var(--ink); font-weight:850; }
+      .setting.toggle-setting { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+      .setting.toggle-setting input { width:18px; height:18px; accent-color:var(--leaf); }
       .stats { grid-template-columns:repeat(auto-fit,minmax(185px,1fr)); }
       .stat strong { font-size:2.2rem; }
       .history { margin-top:18px; display:grid; gap:10px; }
@@ -705,7 +734,7 @@ def root():
       @keyframes resultPulse { 0% { transform:scale(.94); } 45% { transform:scale(1.08); } 100% { transform:scale(1); } }
       @media (max-width:1100px) { .model-notes { grid-template-columns:repeat(3,minmax(0,1fr)); } .history-row { grid-template-columns:repeat(5,minmax(0,1fr)); } }
       @media (max-width:980px) { .hero,.detect-grid,.cta { grid-template-columns:1fr; } .steps,.stats,.gallery,.ai-grid,.model-notes { grid-template-columns:repeat(2,minmax(0,1fr)); } .nav-links { display:none; } .mobile-menu { display:grid; place-items:center; } }
-      @media (max-width:620px) { .section { width:min(100% - 22px,1180px); padding:58px 0; } .hero { padding-top:36px; } .steps,.stats,.gallery,.ai-grid,.model-notes,.controls,.camera-controls,.facts,.history-row,.mock-stats,.loading-card,.report-meter { grid-template-columns:1fr; } .preview { min-height:330px; } .result-hero { grid-template-columns:1fr; } .grade-badge { width:74px; border-radius:22px; font-size:2.7rem; } .cta { padding:28px; } }
+      @media (max-width:620px) { .section { width:min(100% - 22px,1180px); padding:58px 0; } .hero { padding-top:36px; } .steps,.stats,.gallery,.ai-grid,.model-notes,.controls,.camera-controls,.facts,.history-row,.mock-stats,.loading-card,.report-meter,.settings-grid { grid-template-columns:1fr; } .preview { min-height:330px; } .result-hero { grid-template-columns:1fr; } .grade-badge { width:74px; border-radius:22px; font-size:2.7rem; } .cta { padding:28px; } }
       @media (prefers-reduced-motion:reduce) { *,*::before,*::after { animation:none!important; transition:none!important; scroll-behavior:auto!important; } }
     </style>
   </head>
@@ -783,6 +812,18 @@ def root():
           </div>
           <form id="form" class="controls"><input id="file" name="file" type="file" accept="image/*"><button id="submit" type="submit">Analyze</button></form>
           <div class="camera-controls"><button id="cameraButton" class="secondary" type="button">Start Camera</button><button id="captureButton" class="neutral" type="button" disabled>Capture Frame</button><label class="toggle"><input id="robustMode" type="checkbox" checked><span>Robust Camera</span></label></div>
+          <details class="settings-bar">
+            <summary class="settings-summary">Decision settings <span>Adjust thresholds for next scan</span></summary>
+            <div class="settings-grid">
+              <label class="setting"><div class="setting-head">Fresh threshold <b><span id="freshThresholdValue">40</span>%</b></div><input id="freshThreshold" type="range" min="0" max="95" value="40" step="5"></label>
+              <label class="setting"><div class="setting-head">Adulterant threshold <b><span id="adulteratedThresholdValue">40</span>%</b></div><input id="adulteratedThreshold" type="range" min="0" max="95" value="40" step="5"></label>
+              <label class="setting"><div class="setting-head">Rotten threshold <b><span id="rottenThresholdValue">40</span>%</b></div><input id="rottenThreshold" type="range" min="0" max="95" value="40" step="5"></label>
+              <label class="setting"><div class="setting-head">Fruit-name confidence <b><span id="fruitThresholdValue">12</span>%</b></div><input id="fruitThreshold" type="range" min="0" max="95" value="12" step="1"></label>
+              <label class="setting"><div class="setting-head">YOLO fruit confidence <b><span id="yoloThresholdValue">18</span>%</b></div><input id="yoloThreshold" type="range" min="0" max="95" value="18" step="1"></label>
+              <label class="setting toggle-setting"><div><div class="setting-head">Reject non-fruit</div><p class="detail" style="margin:6px 0 0">Use this for toy/object rejection.</p></div><input id="fruitGateEnabled" type="checkbox"></label>
+              <label class="setting"><div class="setting-head">Fruit gate mode</div><select id="fruitGateMode"><option value="any">Any fruit signal</option><option value="both">YOLO + fruit name</option></select></label>
+            </div>
+          </details>
         </div>
         <aside id="resultPanel" class="panel result-panel">
           <div class="report-main">
@@ -862,14 +903,17 @@ def root():
       <footer class="section" style="padding-top:0"><p class="detail">Built for Fruit Quality Detector for SMS. The style is clean and premium, but no Apple branding, logo, or copied design is used.</p></footer>
     </main>
     <script>
-      const form=document.querySelector("#form"),file=document.querySelector("#file"),statusEl=document.querySelector("#status"),submit=document.querySelector("#submit"),preview=document.querySelector("#preview"),camera=document.querySelector("#camera"),canvas=document.querySelector("#canvas"),cameraButton=document.querySelector("#cameraButton"),captureButton=document.querySelector("#captureButton"),robustMode=document.querySelector("#robustMode"),placeholder=document.querySelector("#placeholder"),dropZone=document.querySelector("#dropZone"),resultPanel=document.querySelector("#resultPanel"),gradeBadge=document.querySelector("#gradeBadge"),title=document.querySelector("#title"),detail=document.querySelector("#detail"),gradeName=document.querySelector("#gradeName"),qualityName=document.querySelector("#qualityName"),fruitName=document.querySelector("#fruitName"),confidenceName=document.querySelector("#confidenceName"),recommendation=document.querySelector("#recommendation"),defects=document.querySelector("#defects"),scoreRing=document.querySelector("#scoreRing"),scoreValue=document.querySelector("#scoreValue"),probabilities=document.querySelector("#probabilities"),loading=document.querySelector("#loading"),loadingTitle=document.querySelector("#loadingTitle"),loadingDetail=document.querySelector("#loadingDetail"),eta=document.querySelector("#eta"),progressCircle=document.querySelector("#progressCircle"),progressText=document.querySelector("#progressText"),processText=document.querySelector("#processText"),processTime=document.querySelector("#processTime"),historyList=document.querySelector("#historyList"),totalScans=document.querySelector("#totalScans"),freshRate=document.querySelector("#freshRate"),defectiveRate=document.querySelector("#defectiveRate"),avgScore=document.querySelector("#avgScore"),avgTime=document.querySelector("#avgTime"),steps=[...document.querySelectorAll(".step")],sampleButtons=[...document.querySelectorAll(".try-sample")];
+      const form=document.querySelector("#form"),file=document.querySelector("#file"),statusEl=document.querySelector("#status"),submit=document.querySelector("#submit"),preview=document.querySelector("#preview"),camera=document.querySelector("#camera"),canvas=document.querySelector("#canvas"),cameraButton=document.querySelector("#cameraButton"),captureButton=document.querySelector("#captureButton"),robustMode=document.querySelector("#robustMode"),placeholder=document.querySelector("#placeholder"),dropZone=document.querySelector("#dropZone"),resultPanel=document.querySelector("#resultPanel"),gradeBadge=document.querySelector("#gradeBadge"),title=document.querySelector("#title"),detail=document.querySelector("#detail"),gradeName=document.querySelector("#gradeName"),qualityName=document.querySelector("#qualityName"),fruitName=document.querySelector("#fruitName"),confidenceName=document.querySelector("#confidenceName"),recommendation=document.querySelector("#recommendation"),defects=document.querySelector("#defects"),scoreRing=document.querySelector("#scoreRing"),scoreValue=document.querySelector("#scoreValue"),probabilities=document.querySelector("#probabilities"),loading=document.querySelector("#loading"),loadingTitle=document.querySelector("#loadingTitle"),loadingDetail=document.querySelector("#loadingDetail"),eta=document.querySelector("#eta"),progressCircle=document.querySelector("#progressCircle"),progressText=document.querySelector("#progressText"),processText=document.querySelector("#processText"),processTime=document.querySelector("#processTime"),historyList=document.querySelector("#historyList"),totalScans=document.querySelector("#totalScans"),freshRate=document.querySelector("#freshRate"),defectiveRate=document.querySelector("#defectiveRate"),avgScore=document.querySelector("#avgScore"),avgTime=document.querySelector("#avgTime"),freshThreshold=document.querySelector("#freshThreshold"),adulteratedThreshold=document.querySelector("#adulteratedThreshold"),rottenThreshold=document.querySelector("#rottenThreshold"),fruitThreshold=document.querySelector("#fruitThreshold"),yoloThreshold=document.querySelector("#yoloThreshold"),fruitGateEnabled=document.querySelector("#fruitGateEnabled"),fruitGateMode=document.querySelector("#fruitGateMode"),steps=[...document.querySelectorAll(".step")],sampleButtons=[...document.querySelectorAll(".try-sample")],settingsInputs=[freshThreshold,adulteratedThreshold,rottenThreshold,fruitThreshold,yoloThreshold,fruitGateEnabled,fruitGateMode];
       let stream=null,capturedBlob=null,progressTimer=null,startedAt=0;
       const dashboardState={total:1248,fresh:973,defective:175,scoreSum:1248*86,timeSum:1248*18.4};
       const pipeline=[{t:0,p:8,title:"Reading image",text:"Preparing the selected image for analysis.",step:0},{t:1200,p:24,title:"Cleaning frame",text:"Applying robust camera cleanup when enabled.",step:1},{t:2800,p:46,title:"Checking fruit",text:"Running object detection and fruit-name checks.",step:2},{t:5200,p:70,title:"Grading quality",text:"Running quality classification for Fresh, Adulterant, or Rotten.",step:3},{t:8200,p:88,title:"Drawing result",text:"Building the annotated image and result panel.",step:3}];
       function setStatus(text,mode=""){statusEl.textContent=text;statusEl.className="status"+(mode?" "+mode:"");}
       function setWorkflow(index,done=false){steps.forEach((el,i)=>{el.classList.toggle("active",i===index&&!done);el.classList.toggle("done",i<index||done);});}
       function setProcess(text,time){processText.textContent=text;processTime.textContent=time;}
-      function lockControls(locked){submit.disabled=locked;cameraButton.disabled=locked;file.disabled=locked;robustMode.disabled=locked;captureButton.disabled=locked||!stream;}
+      function thresholdNumber(el){return Math.max(0,Math.min(.95,(Number(el.value)||0)/100));}
+      function updateSettingLabels(){document.querySelector("#freshThresholdValue").textContent=freshThreshold.value;document.querySelector("#adulteratedThresholdValue").textContent=adulteratedThreshold.value;document.querySelector("#rottenThresholdValue").textContent=rottenThreshold.value;document.querySelector("#fruitThresholdValue").textContent=fruitThreshold.value;document.querySelector("#yoloThresholdValue").textContent=yoloThreshold.value;}
+      function appendThresholdSettings(data){data.append("quality_threshold_fresh",thresholdNumber(freshThreshold).toFixed(2));data.append("quality_threshold_adulterated",thresholdNumber(adulteratedThreshold).toFixed(2));data.append("quality_threshold_rotten",thresholdNumber(rottenThreshold).toFixed(2));data.append("quality_min_confidence",Math.min(thresholdNumber(freshThreshold),thresholdNumber(adulteratedThreshold),thresholdNumber(rottenThreshold)).toFixed(2));data.append("fruit_gate_enabled",fruitGateEnabled.checked?"true":"false");data.append("fruit_gate_mode",fruitGateMode.value);data.append("fruit_min_confidence",thresholdNumber(fruitThreshold).toFixed(2));data.append("yolo_min_real_fruit_confidence",thresholdNumber(yoloThreshold).toFixed(2));}
+      function lockControls(locked){submit.disabled=locked;cameraButton.disabled=locked;file.disabled=locked;robustMode.disabled=locked;settingsInputs.forEach(el=>{el.disabled=locked;});captureButton.disabled=locked||!stream;}
       function showError(message){stopProgress();lockControls(false);title.textContent="Analysis failed";detail.innerHTML='<span class="error">'+message+"</span>";setStatus("Error","error-state");setProcess(message,"Error");loading.style.display="none";}
       function setCircleProgress(value){const pct=Math.max(0,Math.min(100,Math.round(value)));progressCircle.style.setProperty("--progress",pct);progressText.textContent=pct+"%";}
       function updateReportScore(overall){const pct=Math.max(0,Math.min(100,Math.round((overall.class_conf||0)*100)));scoreRing.style.setProperty("--score",pct);scoreValue.textContent=pct+"%";}
@@ -899,9 +943,11 @@ def root():
       dropZone.addEventListener("drop",event=>{event.preventDefault();dropZone.classList.remove("dragging");loadFile(event.dataTransfer.files[0]);});
       cameraButton.addEventListener("click",async()=>{if(stream){stopCamera();return;}try{stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"},audio:false});camera.srcObject=stream;await camera.play();preview.classList.remove("visible");preview.style.display="none";placeholder.style.display="none";camera.style.display="block";requestAnimationFrame(()=>camera.classList.add("visible"));cameraButton.textContent="Stop Camera";captureButton.disabled=false;setStatus("Camera live");setProcess("Camera is live. Capture a frame when the fruit is clear.","Live");}catch(e){showError("Camera permission was denied or no camera is available.");}});
       captureButton.addEventListener("click",async()=>{if(!stream)return;captureButton.disabled=true;setStatus(robustMode.checked?"Capturing best frame...":"Capturing...","analyzing");setProcess(robustMode.checked?"Capturing multiple frames and choosing the sharpest one.":"Capturing one frame.","Capturing");try{capturedBlob=await captureCameraBlob();file.value="";showPreview(URL.createObjectURL(capturedBlob));stopCamera();setStatus("Frame ready");setProcess("Frame captured. Press Analyze to start grading.","Ready");}catch(e){showError("Could not capture a clean camera frame.");captureButton.disabled=false;}});
-      async function analyzeCurrentImage(override=null){if(!file.files.length&&!capturedBlob){showError("Choose an image or capture a camera frame first.");return;}startProgress();const data=new FormData();data.append("file",capturedBlob||file.files[0],capturedBlob?"camera-robust-frame.jpg":file.files[0].name);if(capturedBlob&&robustMode.checked)data.append("robust_camera","true");try{const response=await fetch("/detect",{method:"POST",body:data});const result=await response.json();if(!response.ok)throw new Error(result.detail||"Backend could not grade this image.");const durationSec=Math.max(.1,(Date.now()-startedAt)/1000),overall=override?override.overall:(result.overall||{}),fruit=override?override.fruit:(result.fruit||{}),decision=result.decision||{},rec=recommendationFor(overall,decision);finishProgress();applyGradeState(overall);updateReportScore(overall);title.textContent=(overall.grade||"?")+" - "+(overall.label||"Quality");gradeName.textContent=overall.grade_label||("Grade "+(overall.grade||"?"));qualityName.textContent=overall.label||"Unknown";fruitName.textContent=fruit.label||"Unknown";confidenceName.textContent=Math.round((overall.class_conf||0)*100)+"%";recommendation.textContent=rec[0];defects.textContent=override?"Gallery sample report matched to the selected example for presentation.":rec[1];detail.textContent="Fruit: "+(fruit.label||"Unknown")+" ("+Math.round((fruit.confidence||0)*100)+"%). Quality confidence: "+Math.round((overall.class_conf||0)*100)+"%.";if(overall.accepted===false&&decision.message)detail.textContent=decision.message+" Fruit: "+(fruit.label||"Unknown")+".";if(result.annotated_image&&!override)showPreview("data:image/jpeg;base64,"+result.annotated_image);setStatus("Done","done");renderProbabilities(overall.probabilities||{});updateDashboard(overall,durationSec);addHistory(overall,fruit,durationSec);}catch(error){showError(error.message||"Unknown error");}finally{lockControls(false);}}
+      async function analyzeCurrentImage(override=null){if(!file.files.length&&!capturedBlob){showError("Choose an image or capture a camera frame first.");return;}startProgress();const data=new FormData();data.append("file",capturedBlob||file.files[0],capturedBlob?"camera-robust-frame.jpg":file.files[0].name);if(capturedBlob&&robustMode.checked)data.append("robust_camera","true");appendThresholdSettings(data);try{const response=await fetch("/detect",{method:"POST",body:data});const result=await response.json();if(!response.ok)throw new Error(result.detail||"Backend could not grade this image.");const durationSec=Math.max(.1,(Date.now()-startedAt)/1000),overall=override?override.overall:(result.overall||{}),fruit=override?override.fruit:(result.fruit||{}),decision=result.decision||{},rec=recommendationFor(overall,decision);finishProgress();applyGradeState(overall);updateReportScore(overall);title.textContent=(overall.grade||"?")+" - "+(overall.label||"Quality");gradeName.textContent=overall.grade_label||("Grade "+(overall.grade||"?"));qualityName.textContent=overall.label||"Unknown";fruitName.textContent=fruit.label||"Unknown";confidenceName.textContent=Math.round((overall.class_conf||0)*100)+"%";recommendation.textContent=rec[0];defects.textContent=override?"Gallery sample report matched to the selected example for presentation.":rec[1];detail.textContent="Fruit: "+(fruit.label||"Unknown")+" ("+Math.round((fruit.confidence||0)*100)+"%). Quality confidence: "+Math.round((overall.class_conf||0)*100)+"%.";if(overall.accepted===false&&decision.message)detail.textContent=decision.message+" Fruit: "+(fruit.label||"Unknown")+".";if(result.annotated_image&&!override)showPreview("data:image/jpeg;base64,"+result.annotated_image);setStatus("Done","done");renderProbabilities(overall.probabilities||{});updateDashboard(overall,durationSec);addHistory(overall,fruit,durationSec);}catch(error){showError(error.message||"Unknown error");}finally{lockControls(false);}}
       async function tryGallerySample(button){const url=button.dataset.url,titleText=button.dataset.title||"gallery-sample",override=sampleOverrideFrom(button);document.querySelector("#detect").scrollIntoView({behavior:"smooth",block:"start"});setStatus("Loading sample","analyzing");setProcess("Loading gallery sample and preparing matched report.","Gallery sample");try{button.disabled=true;const response=await fetch(url,{mode:"cors"});if(!response.ok)throw new Error("Gallery sample image could not be downloaded.");const blob=await response.blob();const sampleFile=new File([blob],titleText+".jpg",{type:blob.type||"image/jpeg"});loadFile(sampleFile);await sleep(350);await analyzeCurrentImage(override);}catch(error){showError((error&&error.message)||"Could not run the gallery sample. Upload your own image instead.");}finally{button.disabled=false;}}
       form.addEventListener("submit",event=>{event.preventDefault();analyzeCurrentImage();});
+      settingsInputs.forEach(el=>el.addEventListener("input",updateSettingLabels));
+      updateSettingLabels();
       sampleButtons.forEach(button=>button.addEventListener("click",()=>tryGallerySample(button)));
     </script>
   </body>
@@ -938,6 +984,14 @@ async def detect(
     request: Request,
     file: UploadFile = File(...),
     robust_camera: bool = Form(False),
+    quality_min_confidence: float | None = Form(None),
+    quality_threshold_fresh: float | None = Form(None),
+    quality_threshold_adulterated: float | None = Form(None),
+    quality_threshold_rotten: float | None = Form(None),
+    fruit_gate_enabled: bool | None = Form(None),
+    fruit_gate_mode: str | None = Form(None),
+    fruit_min_confidence: float | None = Form(None),
+    yolo_min_real_fruit_confidence: float | None = Form(None),
 ):
     query_robust = request.query_params.get("robust_camera")
     if query_robust is not None:
@@ -954,11 +1008,21 @@ async def detect(
     if robust_requested:
         image = robust_camera_preprocess(image)
 
+    request_thresholds = threshold_config(
+        quality_min_confidence=quality_min_confidence,
+        quality_threshold_fresh=quality_threshold_fresh,
+        quality_threshold_adulterated=quality_threshold_adulterated,
+        quality_threshold_rotten=quality_threshold_rotten,
+        fruit_gate_enabled=fruit_gate_enabled,
+        fruit_gate_mode=fruit_gate_mode,
+        fruit_min_confidence=fruit_min_confidence,
+        yolo_min_real_fruit_confidence=yolo_min_real_fruit_confidence,
+    )
     detections = yolo_detect(image)
     fruit_meta = classify_fruit_name(raw_image if robust_requested else image)
-    fruit_gate = fruit_gate_decision(detections, fruit_meta)
+    fruit_gate = fruit_gate_decision(detections, fruit_meta, request_thresholds)
     quality_image, quality_detection = select_quality_image(image, detections)
-    if FRUIT_GATE_ENABLED and not fruit_gate["accepted"]:
+    if request_thresholds["fruit_gate_enabled"] and not fruit_gate["accepted"]:
         quality = uncertain_quality(
             "no_reliable_fruit_detected",
             "No reliable real-fruit signal was detected. Use a real fruit or a clearer image.",
@@ -966,7 +1030,7 @@ async def detect(
     else:
         try:
             quality = classify_quality(quality_image)
-            quality = apply_quality_thresholds(quality)
+            quality = apply_quality_thresholds(quality, request_thresholds)
         except RuntimeError as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
 
@@ -1008,7 +1072,7 @@ async def detect(
             "quality_accepted": quality.get("accepted", True),
             "reject_reason": quality.get("reject_reason"),
             "message": quality.get("message"),
-            "thresholds": threshold_config(),
+            "thresholds": request_thresholds,
         },
         "total": len(final_detections),
         "used_fallback": any(det.get("fallback", False) for det in detections),
