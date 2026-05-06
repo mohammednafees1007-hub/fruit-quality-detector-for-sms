@@ -126,6 +126,7 @@ flowchart LR
 - [Raspberry Pi 5 Future Deployment Plan](#raspberry-pi-5-future-deployment-plan)
 - [Project Structure](#project-structure)
 - [Installation and Running](#installation-and-running)
+- [Raspberry Pi Branch](#raspberry-pi-branch)
 - [API Endpoints](#api-endpoints)
 - [Training Pipeline](#training-pipeline)
 - [Results and Discussion](#results-and-discussion)
@@ -696,6 +697,16 @@ For a slower full application pipeline test with YOLO crop timing:
 ```powershell
 .\.venv\Scripts\python.exe master_model_test.py --limit 50 --mode full-pipeline --skip-fruit-name
 ```
+
+## Raspberry Pi Branch
+
+The `pi` branch contains the Raspberry Pi runtime notes and dependency file:
+
+- `PI_SETUP.md` explains what was changed to run on Pi and lists the tested commands.
+- `requirements-pi.txt` contains the dependency versions used on the Pi runtime.
+- `main.py` falls back to full-image inference when YOLO is not installed, so the app can still run and return fruit name plus quality grade.
+
+The Pi branch keeps the GitHub fruit-name behavior: CLIP `ViT-L/14` first, then VGG19 and MobileNetV2 ImageNet fallbacks. Large runtime downloads such as `.venv/` and `models/clip/ViT-L-14.pt` are intentionally ignored by git.
 
 ## API Endpoints
 
