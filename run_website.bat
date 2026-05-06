@@ -10,10 +10,10 @@ set QUALITY_THRESHOLD_FRESH=0.40
 set QUALITY_THRESHOLD_ADULTERATED=0.40
 set QUALITY_THRESHOLD_ROTTEN=0.40
 
-rem Real-fruit gate. Keep false for normal demo mode; set true to reject weak/no-fruit inputs.
-set FRUIT_GATE_ENABLED=false
+rem Real-fruit gate. Enabled by default to reject weak/no-fruit inputs.
+set FRUIT_GATE_ENABLED=true
 set FRUIT_GATE_MODE=any
-set FRUIT_MIN_CONFIDENCE=0.12
+set FRUIT_MIN_CONFIDENCE=0.22
 set YOLO_MIN_REAL_FRUIT_CONFIDENCE=0.18
 set FRUIT_NAMING_ENABLED=true
 

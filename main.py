@@ -37,9 +37,9 @@ QUALITY_CLASS_THRESHOLDS = {
     "adulterated": float(os.environ.get("QUALITY_THRESHOLD_ADULTERATED", os.environ.get("QUALITY_MIN_CONFIDENCE", "0.40"))),
     "rotten": float(os.environ.get("QUALITY_THRESHOLD_ROTTEN", os.environ.get("QUALITY_MIN_CONFIDENCE", "0.40"))),
 }
-FRUIT_GATE_ENABLED = os.environ.get("FRUIT_GATE_ENABLED", "false").lower() in {"1", "true", "yes", "on"}
+FRUIT_GATE_ENABLED = os.environ.get("FRUIT_GATE_ENABLED", "true").lower() in {"1", "true", "yes", "on"}
 FRUIT_GATE_MODE = os.environ.get("FRUIT_GATE_MODE", "any").lower()
-FRUIT_MIN_CONFIDENCE = float(os.environ.get("FRUIT_MIN_CONFIDENCE", "0.12"))
+FRUIT_MIN_CONFIDENCE = float(os.environ.get("FRUIT_MIN_CONFIDENCE", "0.22"))
 YOLO_MIN_REAL_FRUIT_CONFIDENCE = float(os.environ.get("YOLO_MIN_REAL_FRUIT_CONFIDENCE", "0.18"))
 FRUIT_NAMING_ENABLED = os.environ.get("FRUIT_NAMING_ENABLED", "true").lower() in {"1", "true", "yes", "on"}
 
@@ -295,14 +295,16 @@ def fruit_gate_decision(detections: list[dict], fruit_meta: dict, config: dict |
     fruit_conf = float(fruit_meta.get("fruit_conf", 0.0) or 0.0)
     yolo_ok = best_real_detection is not None
     fruit_name_ok = bool(fruit_name and fruit_name != "unknown" and fruit_conf >= config["fruit_min_confidence"])
+    non_fruit_filter_passed = yolo_ok or fruit_name_ok
     if config["fruit_gate_mode"] == "both":
         accepted = yolo_ok and fruit_name_ok
     else:
-        accepted = yolo_ok or fruit_name_ok
+        accepted = non_fruit_filter_passed
 
     return {
         "enabled": config["fruit_gate_enabled"],
         "accepted": accepted,
+        "non_fruit_filter_passed": non_fruit_filter_passed,
         "mode": config["fruit_gate_mode"],
         "yolo_ok": yolo_ok,
         "fruit_name_ok": fruit_name_ok,
@@ -314,6 +316,7 @@ def fruit_gate_decision(detections: list[dict], fruit_meta: dict, config: dict |
             "fruit_min_confidence": config["fruit_min_confidence"],
             "yolo_min_real_fruit_confidence": config["yolo_min_real_fruit_confidence"],
         },
+        "message": "Reliable fruit signal found." if non_fruit_filter_passed else "No reliable fruit signal found.",
     }
 
 

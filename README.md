@@ -673,13 +673,13 @@ set QUALITY_MIN_CONFIDENCE=0.40
 set QUALITY_THRESHOLD_FRESH=0.40
 set QUALITY_THRESHOLD_ADULTERATED=0.40
 set QUALITY_THRESHOLD_ROTTEN=0.40
-set FRUIT_GATE_ENABLED=false
+set FRUIT_GATE_ENABLED=true
 set FRUIT_GATE_MODE=any
-set FRUIT_MIN_CONFIDENCE=0.12
+set FRUIT_MIN_CONFIDENCE=0.22
 set YOLO_MIN_REAL_FRUIT_CONFIDENCE=0.18
 ```
 
-Higher quality thresholds make the app reject weak predictions as `Manual Review` instead of forcing Fresh, Adulterant, or Rotten. Set `FRUIT_GATE_ENABLED=true` to reject images where the app cannot find a reliable fruit signal. `FRUIT_GATE_MODE=both` is stricter than `any` because it requires both YOLO fruit evidence and fruit-name confidence.
+Higher quality thresholds make the app reject weak predictions as `Manual Review` instead of forcing Fresh, Adulterant, or Rotten. `FRUIT_GATE_ENABLED=true` keeps the non-fruit filter active, so images without a reliable fruit signal are sent to manual review instead of being graded. `FRUIT_GATE_MODE=both` is stricter than `any` because it requires both YOLO fruit evidence and fruit-name confidence.
 
 ### 6. Open in browser
 
