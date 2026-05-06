@@ -1,0 +1,11 @@
+fastapi==0.115.12
+uvicorn[standard]==0.34.3
+python-multipart==0.0.20
+numpy==2.1.3
+opencv-python==4.11.0.86
+pillow==11.2.1
+tensorflow==2.21.0
+keras==3.14.0
+flatbuffers==25.9.23
+PyYAML==6.0.2
+git+https://github.com/ultralytics/CLIP.git

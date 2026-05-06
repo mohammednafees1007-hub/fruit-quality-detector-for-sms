@@ -361,30 +361,33 @@ def robust_camera_preprocess(image: np.ndarray) -> np.ndarray:
 
 def yolo_detect(image_bgr: np.ndarray) -> list[dict]:
     h, w = image_bgr.shape[:2]
-    yolo = get_yolo()
-    results = yolo(image_bgr, conf=YOLO_CONFIDENCE, imgsz=YOLO_IMAGE_SIZE, iou=0.45, max_det=20, verbose=False)
     detections = []
-    for result in results:
-        for box in result.boxes:
-            coords = box.xyxy[0].cpu().numpy()
-            x1, y1, x2, y2 = map(int, coords)
-            class_id = int(box.cls[0])
-            class_name = yolo.names[class_id] if hasattr(yolo, "names") else str(class_id)
-            class_clean = class_name.replace("_", " ").lower()
-            if class_clean not in FRUIT_CLASSES:
-                continue
-            x1 = max(0, min(x1, w - 1))
-            y1 = max(0, min(y1, h - 1))
-            x2 = max(0, min(x2, w))
-            y2 = max(0, min(y2, h))
-            if x2 <= x1 or y2 <= y1:
-                continue
-            detections.append({
-                "bbox": [x1, y1, x2, y2],
-                "yolo_class": class_clean,
-                "yolo_conf": round(float(box.conf[0]), 4),
-                "fallback": False,
-            })
+    try:
+        yolo = get_yolo()
+        results = yolo(image_bgr, conf=YOLO_CONFIDENCE, imgsz=YOLO_IMAGE_SIZE, iou=0.45, max_det=20, verbose=False)
+        for result in results:
+            for box in result.boxes:
+                coords = box.xyxy[0].cpu().numpy()
+                x1, y1, x2, y2 = map(int, coords)
+                class_id = int(box.cls[0])
+                class_name = yolo.names[class_id] if hasattr(yolo, "names") else str(class_id)
+                class_clean = class_name.replace("_", " ").lower()
+                if class_clean not in FRUIT_CLASSES:
+                    continue
+                x1 = max(0, min(x1, w - 1))
+                y1 = max(0, min(y1, h - 1))
+                x2 = max(0, min(x2, w))
+                y2 = max(0, min(y2, h))
+                if x2 <= x1 or y2 <= y1:
+                    continue
+                detections.append({
+                    "bbox": [x1, y1, x2, y2],
+                    "yolo_class": class_clean,
+                    "yolo_conf": round(float(box.conf[0]), 4),
+                    "fallback": False,
+                })
+    except Exception as exc:
+        print(f"YOLO unavailable; using full-image fallback: {exc}")
     if not detections:
         detections.append({
             "bbox": [0, 0, w, h],
