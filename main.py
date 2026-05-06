@@ -545,7 +545,7 @@ def root():
       .loading-meta { margin:0; color:var(--muted); line-height:1.5; }
       .controls { display:grid; grid-template-columns:minmax(0,1fr) minmax(130px,auto); gap:12px; margin-top:16px; align-items:stretch; }
       input[type=file] { width:100%; border:1px solid var(--line); border-radius:999px; background:white; padding:12px 14px; color:var(--muted); }
-      .camera-controls { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin-top:12px; align-items:stretch; }
+      .camera-controls { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin-top:12px; align-items:stretch; }
       .toggle { min-height:48px; border:1px solid var(--line); border-radius:999px; background:white; display:flex; align-items:center; justify-content:center; gap:8px; font-weight:950; cursor:pointer; box-shadow:var(--soft-shadow); transition:.18s ease; }
       .toggle:hover { transform:translateY(-1px); border-color:#9fc8ad; }
       .toggle input { width:18px; height:18px; accent-color:var(--leaf); }
@@ -685,7 +685,7 @@ def root():
             <div id="loading" class="loading"><div class="loading-card"><div class="circle-wrap"><div id="progressCircle" class="circle-loader"></div><div id="progressText" class="circle-value">4%</div></div><div><p id="loadingTitle" class="loading-title">Preparing image</p><p id="eta" class="eta">Estimated time: --</p><p id="loadingDetail" class="loading-meta">Waiting for upload.</p></div></div></div>
           </div>
           <form id="form" class="controls"><input id="file" name="file" type="file" accept="image/*"><button id="submit" type="submit">Analyze</button></form>
-          <div class="camera-controls"><button id="cameraButton" class="secondary" type="button">Start Camera</button><button id="captureButton" class="neutral" type="button" disabled>Capture Frame</button><label class="toggle"><input id="robustMode" type="checkbox" checked><span>Robust Camera</span></label></div>
+          <div class="camera-controls"><button id="cameraButton" class="secondary" type="button">Start Camera</button><button id="captureButton" class="neutral" type="button" disabled>Capture Frame</button><label class="toggle"><input id="robustMode" type="checkbox" checked><span>Robust Camera</span></label><label class="toggle"><input id="namingMode" type="checkbox" checked><span>Naming Model</span></label></div>
         </div>
         <aside id="resultPanel" class="panel result-panel">
           <div class="report-main">
@@ -765,14 +765,14 @@ def root():
       <footer class="section" style="padding-top:0"><p class="detail">Built for Fruit Quality Detector for SMS. The style is clean and premium, but no Apple branding, logo, or copied design is used.</p></footer>
     </main>
     <script>
-      const form=document.querySelector("#form"),file=document.querySelector("#file"),statusEl=document.querySelector("#status"),submit=document.querySelector("#submit"),preview=document.querySelector("#preview"),camera=document.querySelector("#camera"),canvas=document.querySelector("#canvas"),cameraButton=document.querySelector("#cameraButton"),captureButton=document.querySelector("#captureButton"),robustMode=document.querySelector("#robustMode"),placeholder=document.querySelector("#placeholder"),dropZone=document.querySelector("#dropZone"),resultPanel=document.querySelector("#resultPanel"),gradeBadge=document.querySelector("#gradeBadge"),title=document.querySelector("#title"),detail=document.querySelector("#detail"),gradeName=document.querySelector("#gradeName"),qualityName=document.querySelector("#qualityName"),fruitName=document.querySelector("#fruitName"),confidenceName=document.querySelector("#confidenceName"),recommendation=document.querySelector("#recommendation"),defects=document.querySelector("#defects"),scoreRing=document.querySelector("#scoreRing"),scoreValue=document.querySelector("#scoreValue"),probabilities=document.querySelector("#probabilities"),loading=document.querySelector("#loading"),loadingTitle=document.querySelector("#loadingTitle"),loadingDetail=document.querySelector("#loadingDetail"),eta=document.querySelector("#eta"),progressCircle=document.querySelector("#progressCircle"),progressText=document.querySelector("#progressText"),processText=document.querySelector("#processText"),processTime=document.querySelector("#processTime"),historyList=document.querySelector("#historyList"),totalScans=document.querySelector("#totalScans"),freshRate=document.querySelector("#freshRate"),defectiveRate=document.querySelector("#defectiveRate"),avgScore=document.querySelector("#avgScore"),avgTime=document.querySelector("#avgTime"),steps=[...document.querySelectorAll(".step")],sampleButtons=[...document.querySelectorAll(".try-sample")];
+      const form=document.querySelector("#form"),file=document.querySelector("#file"),statusEl=document.querySelector("#status"),submit=document.querySelector("#submit"),preview=document.querySelector("#preview"),camera=document.querySelector("#camera"),canvas=document.querySelector("#canvas"),cameraButton=document.querySelector("#cameraButton"),captureButton=document.querySelector("#captureButton"),robustMode=document.querySelector("#robustMode"),namingMode=document.querySelector("#namingMode"),placeholder=document.querySelector("#placeholder"),dropZone=document.querySelector("#dropZone"),resultPanel=document.querySelector("#resultPanel"),gradeBadge=document.querySelector("#gradeBadge"),title=document.querySelector("#title"),detail=document.querySelector("#detail"),gradeName=document.querySelector("#gradeName"),qualityName=document.querySelector("#qualityName"),fruitName=document.querySelector("#fruitName"),confidenceName=document.querySelector("#confidenceName"),recommendation=document.querySelector("#recommendation"),defects=document.querySelector("#defects"),scoreRing=document.querySelector("#scoreRing"),scoreValue=document.querySelector("#scoreValue"),probabilities=document.querySelector("#probabilities"),loading=document.querySelector("#loading"),loadingTitle=document.querySelector("#loadingTitle"),loadingDetail=document.querySelector("#loadingDetail"),eta=document.querySelector("#eta"),progressCircle=document.querySelector("#progressCircle"),progressText=document.querySelector("#progressText"),processText=document.querySelector("#processText"),processTime=document.querySelector("#processTime"),historyList=document.querySelector("#historyList"),totalScans=document.querySelector("#totalScans"),freshRate=document.querySelector("#freshRate"),defectiveRate=document.querySelector("#defectiveRate"),avgScore=document.querySelector("#avgScore"),avgTime=document.querySelector("#avgTime"),steps=[...document.querySelectorAll(".step")],sampleButtons=[...document.querySelectorAll(".try-sample")];
       let stream=null,capturedBlob=null,progressTimer=null,startedAt=0;
       const dashboardState={total:1248,fresh:973,defective:175,scoreSum:1248*86,timeSum:1248*18.4};
       const pipeline=[{t:0,p:8,title:"Reading image",text:"Preparing the selected image for analysis.",step:0},{t:1200,p:24,title:"Cleaning frame",text:"Applying robust camera cleanup when enabled.",step:1},{t:2800,p:46,title:"Checking fruit",text:"Running object detection and fruit-name checks.",step:2},{t:5200,p:70,title:"Grading quality",text:"Running quality classification for Fresh, Adulterant, or Rotten.",step:3},{t:8200,p:88,title:"Drawing result",text:"Building the annotated image and result panel.",step:3}];
       function setStatus(text,mode=""){statusEl.textContent=text;statusEl.className="status"+(mode?" "+mode:"");}
       function setWorkflow(index,done=false){steps.forEach((el,i)=>{el.classList.toggle("active",i===index&&!done);el.classList.toggle("done",i<index||done);});}
       function setProcess(text,time){processText.textContent=text;processTime.textContent=time;}
-      function lockControls(locked){submit.disabled=locked;cameraButton.disabled=locked;file.disabled=locked;robustMode.disabled=locked;captureButton.disabled=locked||!stream;}
+      function lockControls(locked){submit.disabled=locked;cameraButton.disabled=locked;file.disabled=locked;robustMode.disabled=locked;namingMode.disabled=locked;captureButton.disabled=locked||!stream;}
       function showError(message){stopProgress();lockControls(false);title.textContent="Analysis failed";detail.innerHTML='<span class="error">'+message+"</span>";setStatus("Error","error-state");setProcess(message,"Error");loading.style.display="none";}
       function setCircleProgress(value){const pct=Math.max(0,Math.min(100,Math.round(value)));progressCircle.style.setProperty("--progress",pct);progressText.textContent=pct+"%";}
       function updateReportScore(overall){const pct=Math.max(0,Math.min(100,Math.round((overall.class_conf||0)*100)));scoreRing.style.setProperty("--score",pct);scoreValue.textContent=pct+"%";}
@@ -802,7 +802,37 @@ def root():
       dropZone.addEventListener("drop",event=>{event.preventDefault();dropZone.classList.remove("dragging");loadFile(event.dataTransfer.files[0]);});
       cameraButton.addEventListener("click",async()=>{if(stream){stopCamera();return;}try{stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"},audio:false});camera.srcObject=stream;await camera.play();preview.classList.remove("visible");preview.style.display="none";placeholder.style.display="none";camera.style.display="block";requestAnimationFrame(()=>camera.classList.add("visible"));cameraButton.textContent="Stop Camera";captureButton.disabled=false;setStatus("Camera live");setProcess("Camera is live. Capture a frame when the fruit is clear.","Live");}catch(e){showError("Camera permission was denied or no camera is available.");}});
       captureButton.addEventListener("click",async()=>{if(!stream)return;captureButton.disabled=true;setStatus(robustMode.checked?"Capturing best frame...":"Capturing...","analyzing");setProcess(robustMode.checked?"Capturing multiple frames and choosing the sharpest one.":"Capturing one frame.","Capturing");try{capturedBlob=await captureCameraBlob();file.value="";showPreview(URL.createObjectURL(capturedBlob));stopCamera();setStatus("Frame ready");setProcess("Frame captured. Press Analyze to start grading.","Ready");}catch(e){showError("Could not capture a clean camera frame.");captureButton.disabled=false;}});
-      async function analyzeCurrentImage(override=null){if(!file.files.length&&!capturedBlob){showError("Choose an image or capture a camera frame first.");return;}startProgress();const data=new FormData();data.append("file",capturedBlob||file.files[0],capturedBlob?"camera-robust-frame.jpg":file.files[0].name);if(capturedBlob&&robustMode.checked)data.append("robust_camera","true");try{const response=await fetch("/detect",{method:"POST",body:data});const result=await response.json();if(!response.ok)throw new Error(result.detail||"Backend could not grade this image.");const durationSec=Math.max(.1,(Date.now()-startedAt)/1000),overall=override?override.overall:(result.overall||{}),fruit=override?override.fruit:(result.fruit||{}),rec=recommendationFor(overall);finishProgress();applyGradeState(overall);updateReportScore(overall);title.textContent=(overall.grade||"?")+" - "+(overall.label||"Quality");gradeName.textContent=overall.grade_label||("Grade "+(overall.grade||"?"));qualityName.textContent=overall.label||"Unknown";fruitName.textContent=fruit.label||"Unknown";confidenceName.textContent=Math.round((overall.class_conf||0)*100)+"%";recommendation.textContent=rec[0];defects.textContent=override?"Gallery sample report matched to the selected example for presentation.":rec[1];detail.textContent="Fruit: "+(fruit.label||"Unknown")+" ("+Math.round((fruit.confidence||0)*100)+"%). Quality confidence: "+Math.round((overall.class_conf||0)*100)+"%.";if(result.annotated_image&&!override)showPreview("data:image/jpeg;base64,"+result.annotated_image);setStatus("Done","done");renderProbabilities(overall.probabilities||{});updateDashboard(overall,durationSec);addHistory(overall,fruit,durationSec);}catch(error){showError(error.message||"Unknown error");}finally{lockControls(false);}}
+      async function analyzeCurrentImage(override=null){
+        if(!file.files.length&&!capturedBlob){showError("Choose an image or capture a camera frame first.");return;}
+        startProgress();
+        const data=new FormData();
+        data.append("file",capturedBlob||file.files[0],capturedBlob?"camera-robust-frame.jpg":file.files[0].name);
+        if(capturedBlob&&robustMode.checked)data.append("robust_camera","true");
+        data.append("fruit_naming",namingMode.checked?"true":"false");
+        try{
+          const response=await fetch("/detect",{method:"POST",body:data});
+          const result=await response.json();
+          if(!response.ok)throw new Error(result.detail||"Backend could not grade this image.");
+          const durationSec=Math.max(.1,(Date.now()-startedAt)/1000),overall=override?override.overall:(result.overall||{}),fruit=override?override.fruit:(result.fruit||{}),fruitEnabled=override?true:!result.preprocessing||result.preprocessing.fruit_naming!==false,rec=recommendationFor(overall);
+          finishProgress();
+          applyGradeState(overall);
+          updateReportScore(overall);
+          title.textContent=(overall.grade||"?")+" - "+(overall.label||"Quality");
+          gradeName.textContent=overall.grade_label||("Grade "+(overall.grade||"?"));
+          qualityName.textContent=overall.label||"Unknown";
+          fruitName.textContent=fruitEnabled?(fruit.label||"Unknown"):"Off";
+          confidenceName.textContent=Math.round((overall.class_conf||0)*100)+"%";
+          recommendation.textContent=rec[0];
+          defects.textContent=override?"Gallery sample report matched to the selected example for presentation.":rec[1];
+          detail.textContent=fruitEnabled?"Fruit: "+(fruit.label||"Unknown")+" ("+Math.round((fruit.confidence||0)*100)+"%). Quality confidence: "+Math.round((overall.class_conf||0)*100)+"%.":"Fruit naming model is off. Quality confidence: "+Math.round((overall.class_conf||0)*100)+"%.";
+          if(result.annotated_image&&!override)showPreview("data:image/jpeg;base64,"+result.annotated_image);
+          setStatus("Done","done");
+          renderProbabilities(overall.probabilities||{});
+          updateDashboard(overall,durationSec);
+          addHistory(overall,fruitEnabled?fruit:{label:"Naming off",confidence:0},durationSec);
+        }catch(error){showError(error.message||"Unknown error");}
+        finally{lockControls(false);}
+      }
       async function tryGallerySample(button){const url=button.dataset.url,titleText=button.dataset.title||"gallery-sample",override=sampleOverrideFrom(button);document.querySelector("#detect").scrollIntoView({behavior:"smooth",block:"start"});setStatus("Loading sample","analyzing");setProcess("Loading gallery sample and preparing matched report.","Gallery sample");try{button.disabled=true;const response=await fetch(url,{mode:"cors"});if(!response.ok)throw new Error("Gallery sample image could not be downloaded.");const blob=await response.blob();const sampleFile=new File([blob],titleText+".jpg",{type:blob.type||"image/jpeg"});loadFile(sampleFile);await sleep(350);await analyzeCurrentImage(override);}catch(error){showError((error&&error.message)||"Could not run the gallery sample. Upload your own image instead.");}finally{button.disabled=false;}}
       form.addEventListener("submit",event=>{event.preventDefault();analyzeCurrentImage();});
       sampleButtons.forEach(button=>button.addEventListener("click",()=>tryGallerySample(button)));
@@ -840,10 +870,14 @@ async def detect(
     request: Request,
     file: UploadFile = File(...),
     robust_camera: bool = Form(False),
+    fruit_naming: bool = Form(True),
 ):
     query_robust = request.query_params.get("robust_camera")
     if query_robust is not None:
         robust_camera = query_robust.lower() in {"1", "true", "yes", "on"}
+    query_fruit_naming = request.query_params.get("fruit_naming")
+    if query_fruit_naming is not None:
+        fruit_naming = query_fruit_naming.lower() in {"1", "true", "yes", "on"}
 
     contents = await file.read()
     image = cv2.imdecode(np.frombuffer(contents, np.uint8), cv2.IMREAD_COLOR)
@@ -856,8 +890,18 @@ async def detect(
     if robust_requested:
         image = robust_camera_preprocess(image)
 
+    fruit_naming_enabled = bool(fruit_naming)
     detections = yolo_detect(image)
-    fruit_meta = classify_fruit_name(raw_image if robust_requested else image)
+    if fruit_naming_enabled:
+        fruit_meta = classify_fruit_name(raw_image if robust_requested else image)
+    else:
+        fruit_meta = {
+            "fruit_name": "unknown",
+            "fruit_conf": 0.0,
+            "fruit_source": "disabled",
+            "fruit_model": None,
+            "fruit_candidates": [],
+        }
     quality_image, quality_detection = select_quality_image(image, detections)
     try:
         quality = classify_quality(quality_image)
@@ -893,6 +937,7 @@ async def detect(
         },
         "preprocessing": {
             "robust_camera": robust_requested,
+            "fruit_naming": fruit_naming_enabled,
             "input_size": {"width": int(input_w), "height": int(input_h)},
             "processed_size": {"width": int(w), "height": int(h)},
             "quality_crop": quality_detection["bbox"] if quality_detection else None,
